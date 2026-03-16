@@ -105,4 +105,38 @@ describe("debrandSystemMessages", () => {
 
     expect(result[0].content).toBe("default_model=nvidia/gpt-oss-120b");
   });
+
+  it("handles realistic OpenClaw system prompt with SOUL.md", () => {
+    // This simulates the actual system prompt OpenClaw generates,
+    // which caused the model to say "I'm Blockrun" (issue #99)
+    const systemContent = [
+      "You are a personal assistant running inside OpenClaw.",
+      "",
+      "## Runtime",
+      "Runtime: agent=main | host=openclaw | os=Darwin 25.3.0 (arm64) | node=v22.14.0 | model=blockrun/auto | default_model=blockrun/auto | channel=control-ui | thinking=off",
+      "",
+      "# Project Context",
+      "",
+      "## SOUL.md",
+      "",
+      "AIBot = Watson",
+      "User = Fred",
+    ].join("\n");
+
+    const messages = [
+      { role: "system", content: systemContent },
+      { role: "user", content: "Hey there!" },
+    ];
+
+    const result = debrandSystemMessages(messages, "deepseek/deepseek-chat");
+
+    // "blockrun" should be completely gone from system prompt
+    expect(result[0].content).not.toContain("blockrun");
+    // Resolved model should appear instead
+    expect(result[0].content).toContain("model=deepseek/deepseek-chat");
+    expect(result[0].content).toContain("default_model=deepseek/deepseek-chat");
+    // SOUL.md content should be preserved
+    expect(result[0].content).toContain("AIBot = Watson");
+    expect(result[0].content).toContain("User = Fred");
+  });
 });
