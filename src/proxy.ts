@@ -114,6 +114,7 @@ const DEFAULT_REQUEST_TIMEOUT_MS = 180_000; // 3 minutes (allows for on-chain tx
 const MAX_FALLBACK_ATTEMPTS = 5; // Maximum models to try in fallback chain (increased from 3 to ensure cheap models are tried)
 const HEALTH_CHECK_TIMEOUT_MS = 2_000; // Timeout for checking existing proxy
 const RATE_LIMIT_COOLDOWN_MS = 60_000; // 60 seconds cooldown for rate-limited models
+const OVERLOAD_COOLDOWN_MS = 15_000; // 15 seconds cooldown for overloaded providers
 const PORT_RETRY_ATTEMPTS = 5; // Max attempts to bind port (handles TIME_WAIT)
 const PORT_RETRY_DELAY_MS = 1_000; // Delay between retry attempts
 const MODEL_BODY_READ_TIMEOUT_MS = 300_000; // 5 minutes for model responses (reasoning models are slow)
@@ -371,6 +372,37 @@ export function categorizeError(status: number, body: string): ErrorCategory | n
  */
 const rateLimitedModels = new Map<string, number>();
 
+/** Per-model overload tracking (529/503 capacity errors) — shorter cooldown than rate limits. */
+const overloadedModels = new Map<string, number>();
+
+/** Per-model error category counts (in-memory, resets on restart). */
+type ProviderErrorCounts = {
+  auth_failure: number;
+  quota_exceeded: number;
+  rate_limited: number;
+  overloaded: number;
+  server_error: number;
+  payment_error: number;
+  config_error: number;
+};
+const perProviderErrors = new Map<string, ProviderErrorCounts>();
+
+/** Record an error category hit for a model. */
+function recordProviderError(modelId: string, category: ErrorCategory): void {
+  if (!perProviderErrors.has(modelId)) {
+    perProviderErrors.set(modelId, {
+      auth_failure: 0,
+      quota_exceeded: 0,
+      rate_limited: 0,
+      overloaded: 0,
+      server_error: 0,
+      payment_error: 0,
+      config_error: 0,
+    });
+  }
+  perProviderErrors.get(modelId)![category]++;
+}
+
 /**
  * Check if a model is currently rate-limited (in cooldown period).
  */
@@ -395,21 +427,41 @@ function markRateLimited(modelId: string): void {
 }
 
 /**
+ * Mark a model as temporarily overloaded (529/503 capacity).
+ * Shorter cooldown than rate limits since capacity restores quickly.
+ */
+function markOverloaded(modelId: string): void {
+  overloadedModels.set(modelId, Date.now());
+  console.log(`[ClawRouter] Model ${modelId} overloaded, will deprioritize for 15s`);
+}
+
+/** Check if a model is in its overload cooldown period. */
+function isOverloaded(modelId: string): boolean {
+  const hitTime = overloadedModels.get(modelId);
+  if (!hitTime) return false;
+  if (Date.now() - hitTime >= OVERLOAD_COOLDOWN_MS) {
+    overloadedModels.delete(modelId);
+    return false;
+  }
+  return true;
+}
+
+/**
  * Reorder models to put rate-limited ones at the end.
  */
 function prioritizeNonRateLimited(models: string[]): string[] {
   const available: string[] = [];
-  const rateLimited: string[] = [];
+  const degraded: string[] = [];
 
   for (const model of models) {
-    if (isRateLimited(model)) {
-      rateLimited.push(model);
+    if (isRateLimited(model) || isOverloaded(model)) {
+      degraded.push(model);
     } else {
       available.push(model);
     }
   }
 
-  return [...available, ...rateLimited];
+  return [...available, ...degraded];
 }
 
 /**
