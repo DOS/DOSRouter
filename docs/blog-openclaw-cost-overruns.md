@@ -74,6 +74,8 @@ ClawRouter compresses every request through 7 layers before it hits the wire:
 
 Layer 6 is the big one. Tool results — file reads, API responses, shell output — can be 10KB+ each. The actual useful signal is often 200–300 chars. ClawRouter extracts errors, status lines, key JSON fields, and compresses the rest. Same model intelligence, 97% fewer tokens on the bulk.
 
+![Extracting intelligence from tool bloat — raw tool output is 97% noise, ClawRouter filters to 3% signal with errors, status lines, and key values](assets/blockrun-clawrouter-observation-compression-97-percent-token-savings.png)
+
 **Overall reduction: 15–40% on typical agentic workloads.** On the $248/day scenario, that's $150–$200/day in savings from compression alone, before any routing changes.
 
 ### 2. Automatic Tier Routing — Right Model for Each Request
