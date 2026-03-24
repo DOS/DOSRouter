@@ -32,7 +32,7 @@ Agents can only sign transactions.<br><br>
 
 </div>
 
-> **ClawRouter** is an open-source smart LLM router that reduces AI API costs by up to 92%. It analyzes each request across 15 dimensions and routes to the cheapest capable model in under 1ms, entirely locally. ClawRouter is the only LLM router built for autonomous AI agents — it uses wallet signatures for authentication (no API keys) and USDC micropayments via the x402 protocol (no credit cards). 44+ models from OpenAI, Anthropic, Google, xAI, DeepSeek, and more. MIT licensed.
+> **ClawRouter** is an open-source smart LLM router that reduces AI API costs by up to 92%. It analyzes each request across 15 dimensions and routes to the cheapest capable model in under 1ms, entirely locally. ClawRouter is the only LLM router built for autonomous AI agents — it uses wallet signatures for authentication (no API keys) and USDC micropayments via the x402 protocol (no credit cards). 55+ models from OpenAI, Anthropic, Google, xAI, DeepSeek, and more. MIT licensed.
 
 ---
 
@@ -58,7 +58,7 @@ This is the stack that lets agents operate autonomously: **x402 + USDC + local r
 
 |                  | OpenRouter        | LiteLLM          | Martian           | Portkey           | **ClawRouter**          |
 | ---------------- | ----------------- | ---------------- | ----------------- | ----------------- | ----------------------- |
-| **Models**       | 200+              | 100+             | Smart routing     | Gateway           | **44+**                 |
+| **Models**       | 200+              | 100+             | Smart routing     | Gateway           | **55+**                 |
 | **Routing**      | Manual selection  | Manual selection | Smart (closed)    | Observability     | **Smart (open source)** |
 | **Auth**         | Account + API key | Your API keys    | Account + API key | Account + API key | **Wallet signature**    |
 | **Payment**      | Credit card       | BYO keys         | Credit card       | $49-499/mo        | **USDC per-request**    |
@@ -161,7 +161,7 @@ Edit existing images with `/img2img`:
 
 ## Models & Pricing
 
-44 models across 8 providers, one wallet. **Starting at $0.0002/request.**
+55+ models across 9 providers, one wallet. **Starting at $0.0002/request.**
 
 > **💡 "Cost per request"** = estimated cost for a typical chat message (~500 input + 500 output tokens).
 
@@ -394,7 +394,7 @@ npm test
 
 **The LLM router built for autonomous agents**
 
-You're here. 44+ models, local smart routing, x402 USDC payments — the only stack that lets agents operate independently.
+You're here. 55+ models, local smart routing, x402 USDC payments — the only stack that lets agents operate independently.
 
 `curl -fsSL https://blockrun.ai/ClawRouter-update | bash`
 

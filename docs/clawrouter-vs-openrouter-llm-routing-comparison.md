@@ -222,7 +222,7 @@ OpenRouter doesn't always pass through provider-specific features correctly. Ima
 
 **Direct provider routing.** ClawRouter routes through BlockRun's API directly to providers — not through a second aggregator. One hop, not two. Provider-specific features work because there's no middleman translating them.
 
-![Guaranteed Feature Parity & Direct Connectivity — Three-panel diagram: Vision (image_url auto-detected → vision-capable models only), Tool Calling (toolCalling flag → agentic models only), Catalog (curated 46+ models with automatic legacy-to-modern redirects). Direct provider routing means no dropped payloads.](./assets/clawrouter-feature-parity-direct-connectivity.png)
+![Guaranteed Feature Parity & Direct Connectivity — Three-panel diagram: Vision (image_url auto-detected → vision-capable models only), Tool Calling (toolCalling flag → agentic models only), Catalog (curated 55+ models with automatic legacy-to-modern redirects). Direct provider routing means no dropped payloads.](./assets/clawrouter-feature-parity-direct-connectivity.png)
 
 ---
 
@@ -240,7 +240,7 @@ When new models launch, OpenRouter's catalog lags. Users configure a model that 
 
 ### How ClawRouter Solves This
 
-ClawRouter maintains a curated catalog of 46+ models across 8 providers, updated with each release. Delisted models have automatic redirect aliases:
+ClawRouter maintains a curated catalog of 55+ models across 9 providers (including 11 free NVIDIA models), updated with each release. Delisted models have automatic redirect aliases:
 
 ```typescript
 // Delisted models redirect automatically
