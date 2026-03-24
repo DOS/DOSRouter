@@ -44822,7 +44822,12 @@ var DEFAULT_ROUTING_CONFIG = {
     COMPLEX: {
       primary: "google/gemini-3.1-flash-lite",
       // $0.25/$1.50 — 1M context handles complexity
-      fallback: ["google/gemini-2.5-flash-lite", "xai/grok-4-0709", "google/gemini-2.5-flash", "deepseek/deepseek-chat"]
+      fallback: [
+        "google/gemini-2.5-flash-lite",
+        "xai/grok-4-0709",
+        "google/gemini-2.5-flash",
+        "deepseek/deepseek-chat"
+      ]
     },
     REASONING: {
       primary: "xai/grok-4-1-fast-reasoning",
@@ -47774,11 +47779,20 @@ function estimateAmount(modelId, bodyLength, maxTokens) {
   return amountMicros.toString();
 }
 var IMAGE_PRICING = {
-  "openai/dall-e-3": { default: 0.04, sizes: { "1024x1024": 0.04, "1792x1024": 0.08, "1024x1792": 0.08 } },
-  "openai/gpt-image-1": { default: 0.02, sizes: { "1024x1024": 0.02, "1536x1024": 0.04, "1024x1536": 0.04 } },
+  "openai/dall-e-3": {
+    default: 0.04,
+    sizes: { "1024x1024": 0.04, "1792x1024": 0.08, "1024x1792": 0.08 }
+  },
+  "openai/gpt-image-1": {
+    default: 0.02,
+    sizes: { "1024x1024": 0.02, "1536x1024": 0.04, "1024x1536": 0.04 }
+  },
   "black-forest/flux-1.1-pro": { default: 0.04 },
   "google/nano-banana": { default: 0.05 },
-  "google/nano-banana-pro": { default: 0.1, sizes: { "1024x1024": 0.1, "2048x2048": 0.1, "4096x4096": 0.15 } }
+  "google/nano-banana-pro": {
+    default: 0.1,
+    sizes: { "1024x1024": 0.1, "2048x2048": 0.1, "4096x4096": 0.15 }
+  }
 };
 function estimateImageCost(model, size5, n = 1) {
   const pricing = IMAGE_PRICING[model];
@@ -48334,7 +48348,13 @@ async function startProxy(options) {
       }
       if (req.url?.match(/^\/v1\/(?:x|partner)\//)) {
         try {
-          await proxyPartnerRequest(req, res, apiBase, payFetch, () => paymentStore.getStore()?.amountUsd ?? 0);
+          await proxyPartnerRequest(
+            req,
+            res,
+            apiBase,
+            payFetch,
+            () => paymentStore.getStore()?.amountUsd ?? 0
+          );
         } catch (err) {
           const error = err instanceof Error ? err : new Error(String(err));
           options.onError?.(error);
@@ -50823,8 +50843,9 @@ function injectModelsConfig(logger) {
     needsWrite = true;
   }
   const defaults = agents.defaults;
-  if (!defaults.model) {
-    defaults.model = {};
+  if (!defaults.model || typeof defaults.model !== "object" || Array.isArray(defaults.model)) {
+    const prev = typeof defaults.model === "string" ? defaults.model : void 0;
+    defaults.model = prev ? { primary: prev } : {};
     needsWrite = true;
   }
   const model = defaults.model;
@@ -51033,9 +51054,7 @@ async function startProxyInBackground(api) {
     }
     if (currentChain === "solana" && (balance.isEmpty || balance.isLow)) {
       try {
-        const { SolanaBalanceMonitor: SolanaBalanceMonitor2 } = await Promise.resolve().then(() => (init_solana_balance(), solana_balance_exports));
-        const monitor = proxy.balanceMonitor;
-        const solLamports = await monitor.checkSolBalance();
+        const solLamports = await proxy.balanceMonitor.checkSolBalance();
         if (solLamports > 10000000n) {
           const sol = Number(solLamports) / 1e9;
           api.logger.info(

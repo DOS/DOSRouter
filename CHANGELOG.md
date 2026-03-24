@@ -4,6 +4,14 @@ All notable changes to ClawRouter.
 
 ---
 
+## v0.12.70 — Mar 24, 2026
+
+### Fixed
+
+- **Plugin crash on string model config** — ClawRouter crashed during OpenClaw plugin registration with `TypeError: Cannot create property 'primary' on string 'blockrun/auto'`. This happened when `agents.defaults.model` in the OpenClaw config was a plain string (e.g. `"blockrun/auto"`) instead of the expected object `{ primary: "blockrun/auto" }`. Now auto-converts string/array/non-object model values to the correct object form.
+
+---
+
 ## v0.12.67 — Mar 22, 2026
 
 ### Fixed

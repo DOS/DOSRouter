@@ -252,8 +252,11 @@ function injectModelsConfig(logger: { info: (msg: string) => void }): void {
     needsWrite = true;
   }
   const defaults = agents.defaults as Record<string, unknown>;
-  if (!defaults.model) {
-    defaults.model = {};
+  if (!defaults.model || typeof defaults.model !== "object" || Array.isArray(defaults.model)) {
+    // Convert plain string "blockrun/auto" → { primary: "blockrun/auto" }
+    // Also handles number, boolean, array, or any other non-object type
+    const prev = typeof defaults.model === "string" ? defaults.model : undefined;
+    defaults.model = prev ? { primary: prev } : {};
     needsWrite = true;
   }
   const model = defaults.model as Record<string, unknown>;
