@@ -49967,7 +49967,8 @@ async function collectWalletInfo() {
         balance: null,
         isLow: false,
         isEmpty: true,
-        source: null
+        source: null,
+        paymentChain: "base"
       };
     }
     let solanaAddress = null;
@@ -49977,9 +49978,17 @@ async function collectWalletInfo() {
       } catch {
       }
     }
-    const monitor = new BalanceMonitor(address2);
+    const paymentChain = await resolvePaymentChain();
     try {
-      const balanceInfo = await monitor.checkBalance();
+      let balanceInfo;
+      if (paymentChain === "solana" && solanaAddress) {
+        const { SolanaBalanceMonitor: SolanaBalanceMonitor2 } = await Promise.resolve().then(() => (init_solana_balance(), solana_balance_exports));
+        const monitor = new SolanaBalanceMonitor2(solanaAddress);
+        balanceInfo = await monitor.checkBalance();
+      } else {
+        const monitor = new BalanceMonitor(address2);
+        balanceInfo = await monitor.checkBalance();
+      }
       return {
         exists: true,
         valid: true,
@@ -49988,7 +49997,8 @@ async function collectWalletInfo() {
         balance: balanceInfo.balanceUSD,
         isLow: balanceInfo.isLow,
         isEmpty: balanceInfo.isEmpty,
-        source
+        source,
+        paymentChain
       };
     } catch {
       return {
@@ -49999,7 +50009,8 @@ async function collectWalletInfo() {
         balance: null,
         isLow: false,
         isEmpty: false,
-        source
+        source,
+        paymentChain
       };
     }
   } catch {
@@ -50011,7 +50022,8 @@ async function collectWalletInfo() {
       balance: null,
       isLow: false,
       isEmpty: true,
-      source: null
+      source: null,
+      paymentChain: "base"
     };
   }
 }
@@ -50066,7 +50078,11 @@ function identifyIssues(result) {
     issues.push("No wallet found");
   }
   if (result.wallet.isEmpty) {
-    issues.push("Wallet is empty - need to fund with USDC on Base");
+    const chain3 = result.wallet.paymentChain === "solana" ? "Solana" : "Base";
+    issues.push(`Wallet is empty - need to fund with USDC on ${chain3}`);
+    if (result.wallet.paymentChain === "base" && result.wallet.solanaAddress) {
+      issues.push("Tip: if you funded Solana, run /wallet solana to switch chains");
+    }
   } else if (result.wallet.isLow) {
     issues.push("Wallet balance is low (< $1.00)");
   }
@@ -50093,8 +50109,13 @@ function printDiagnostics(result) {
     if (result.wallet.solanaAddress) {
       console.log(`  ${green(`Solana Address: ${result.wallet.solanaAddress}`)}`);
     }
+    const chainLabel = result.wallet.paymentChain === "solana" ? "Solana" : "Base";
+    console.log(`  ${green(`Chain: ${chainLabel}`)}`);
     if (result.wallet.isEmpty) {
-      console.log(`  ${red(`Balance: $0.00 - NEED TO FUND!`)}`);
+      console.log(`  ${red(`Balance: $0.00 - NEED TO FUND WITH USDC ON ${chainLabel.toUpperCase()}!`)}`);
+      if (result.wallet.paymentChain === "base" && result.wallet.solanaAddress) {
+        console.log(`  ${yellow(`Tip: funded Solana instead? Run /wallet solana to switch`)}`);
+      }
     } else if (result.wallet.isLow) {
       console.log(`  ${yellow(`Balance: ${result.wallet.balance} (low)`)}`);
     } else if (result.wallet.balance) {

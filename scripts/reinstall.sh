@@ -257,8 +257,27 @@ if (fs.existsSync(configPath)) {
 "
 
 # 6. Install plugin (config is ready, but no allow list yet to avoid validation error)
+# Back up OpenClaw credentials (channels, WhatsApp/Telegram state) before plugin install
+CREDS_DIR="$HOME/.openclaw/credentials"
+CREDS_BACKUP=""
+if [ -d "$CREDS_DIR" ] && [ "$(ls -A "$CREDS_DIR" 2>/dev/null)" ]; then
+  CREDS_BACKUP="$(mktemp -d)/openclaw-credentials-backup"
+  cp -a "$CREDS_DIR" "$CREDS_BACKUP"
+  echo "  ✓ Backed up OpenClaw credentials"
+fi
+
 echo "→ Installing ClawRouter..."
 openclaw plugins install @blockrun/clawrouter
+
+# Restore credentials if they were lost during plugin install
+if [ -n "$CREDS_BACKUP" ] && [ -d "$CREDS_BACKUP" ]; then
+  if [ ! -d "$CREDS_DIR" ] || [ -z "$(ls -A "$CREDS_DIR" 2>/dev/null)" ]; then
+    mkdir -p "$CREDS_DIR"
+    cp -a "$CREDS_BACKUP/"* "$CREDS_DIR/"
+    echo "  ✓ Restored OpenClaw credentials (channels preserved)"
+  fi
+  rm -rf "$(dirname "$CREDS_BACKUP")"
+fi
 
 # 6.1. Verify installation (check dist/ files exist)
 echo "→ Verifying installation..."
