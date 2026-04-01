@@ -95,9 +95,12 @@ if (Test-Path $CONFIG_PATH) {
 # ── Step 4: Get latest version from npm ───────────────────────
 Write-Step "Fetching latest version from npm..."
 try {
-    $LATEST_VERSION = (npm view @blockrun/clawrouter@latest version 2>&1).Trim()
+    $verFile = Join-Path $env:TEMP "clawrouter-latest-ver.txt"
+    & cmd /c "npm view @blockrun/clawrouter@latest version > `"$verFile`" 2>nul"
+    $LATEST_VERSION = (Get-Content $verFile -ErrorAction Stop).Trim()
+    Remove-Item $verFile -ErrorAction SilentlyContinue
     if (-not $LATEST_VERSION -or $LATEST_VERSION -match 'error|ERR') {
-        throw "npm view failed: $LATEST_VERSION"
+        throw "npm view returned: $LATEST_VERSION"
     }
     Write-Ok "Latest: v$LATEST_VERSION"
 } catch {
@@ -113,17 +116,8 @@ $tmpDir = Join-Path $env:TEMP "clawrouter-install-$(Get-Random)"
 New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
 
 try {
-    # Use Start-Process to fully isolate npm's stderr from PowerShell's error stream
-    $packLog = Join-Path $env:TEMP "clawrouter-pack.log"
-    $packErr = "$packLog.err"
-    $packProc = Start-Process -FilePath "npm" `
-        -ArgumentList "pack","@blockrun/clawrouter@$LATEST_VERSION","--pack-destination",$tmpDir,"--prefer-online" `
-        -RedirectStandardOutput $packLog -RedirectStandardError $packErr `
-        -Wait -PassThru -NoNewWindow
-    if ($packProc.ExitCode -ne 0) {
-        $errText = Get-Content $packErr -ErrorAction SilentlyContinue | Select-Object -Last 10
-        throw "npm pack failed (exit $($packProc.ExitCode)): $errText"
-    }
+    # Run npm pack via cmd.exe to completely bypass PowerShell's stderr-as-error behavior
+    & cmd /c "npm pack `"@blockrun/clawrouter@$LATEST_VERSION`" --pack-destination `"$tmpDir`" --prefer-online >nul 2>nul"
 
     $tarball = Get-ChildItem "$tmpDir\*.tgz" | Select-Object -First 1
     if (-not $tarball) { throw "npm pack produced no tarball in $tmpDir" }
@@ -146,14 +140,10 @@ try {
 # ── Step 5b: Install npm dependencies ─────────────────────────
 Write-Step "Installing dependencies (Solana, x402, etc.)..."
 $logFile = Join-Path $env:TEMP "clawrouter-npm-install.log"
-$logErr  = "$logFile.err"
-$prev = $ErrorActionPreference; $ErrorActionPreference = 'SilentlyContinue'
-$proc = Start-Process -FilePath "npm" -ArgumentList "install","--omit=dev" -WorkingDirectory $PLUGIN_DIR `
-        -RedirectStandardOutput $logFile -RedirectStandardError $logErr -Wait -PassThru -NoNewWindow
-$ErrorActionPreference = $prev
-if ($proc.ExitCode -ne 0) {
+& cmd /c "cd /d `"$PLUGIN_DIR`" && npm install --omit=dev > `"$logFile`" 2>&1"
+if ($LASTEXITCODE -ne 0) {
     Write-Err "npm install failed. Log: $logFile"
-    Get-Content $logErr -ErrorAction SilentlyContinue | Select-Object -Last 20 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
+    Get-Content $logFile -ErrorAction SilentlyContinue | Select-Object -Last 20 | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
     exit 1
 }
 Write-Ok "Dependencies installed"
