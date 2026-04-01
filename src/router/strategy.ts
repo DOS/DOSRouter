@@ -112,7 +112,7 @@ export class RulesStrategy implements RouterStrategy {
     }
 
     // Apply time-windowed promotions
-    tierConfigs = applyPromotions(tierConfigs, config.promotions, profile!);
+    tierConfigs = applyPromotions(tierConfigs, config.promotions, profile!, options.now);
 
     const agenticScoreValue = ruleResult.agenticScore;
 

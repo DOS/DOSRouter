@@ -92,6 +92,7 @@ async function cmdStatus(port: number): Promise<void> {
     console.log(`  Balance:       ${data.balance ?? "unknown"}`);
     if (data.isLow) console.log(`  ⚠ Balance is low`);
     if (data.isEmpty) console.log(`  ⚠ Balance is empty — using free models`);
+    if (data.upstreamProxy) console.log(`  Upstream Proxy: ${data.upstreamProxy}`);
     console.log();
   } catch {
     console.error(`✗ Cannot connect to ClawRouter on port ${port}`);

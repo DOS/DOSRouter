@@ -88,7 +88,11 @@ describe("RulesStrategy", () => {
 
   it("sets auto profile for default requests", () => {
     const strategy = new RulesStrategy();
-    const decision = strategy.route("what is the capital of France", undefined, 100, baseOptions);
+    // Use a date well outside any promo windows to test base tiers (no promotion overrides)
+    const decision = strategy.route("what is the capital of France", undefined, 100, {
+      ...baseOptions,
+      now: new Date("2025-01-01"),
+    });
 
     expect(decision.profile).toBe("auto");
     expect(decision.tierConfigs).toEqual(DEFAULT_ROUTING_CONFIG.tiers);

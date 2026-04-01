@@ -50,6 +50,8 @@ export type RouterOptions = {
   modelPricing: Map<string, import("./selector.js").ModelPricing>;
   routingProfile?: "eco" | "auto" | "premium";
   hasTools?: boolean;
+  /** Override current time for promotion window checks (for testing). Default: new Date() */
+  now?: Date;
 };
 
 export type TierConfig = {

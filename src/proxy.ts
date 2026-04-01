@@ -91,6 +91,7 @@ import { checkForUpdates } from "./updater.js";
 import { loadExcludeList } from "./exclude-models.js";
 import { PROXY_PORT } from "./config.js";
 import { SessionJournal } from "./journal.js";
+import { applyUpstreamProxy } from "./upstream-proxy.js";
 
 const BLOCKRUN_API = "https://blockrun.ai/api";
 const BLOCKRUN_SOLANA_API = "https://sol.blockrun.ai/api";
@@ -1199,6 +1200,13 @@ export type ProxyOptions = {
   onLowBalance?: (info: LowBalanceInfo) => void;
   /** Called when balance is insufficient for a request (request fails) */
   onInsufficientFunds?: (info: InsufficientFundsInfo) => void;
+  /**
+   * Upstream proxy URL for all outgoing requests.
+   * Supports http://, https://, and socks5:// schemes.
+   * Also readable via BLOCKRUN_UPSTREAM_PROXY environment variable.
+   * Example: "socks5://127.0.0.1:1080"
+   */
+  upstreamProxy?: string;
 };
 
 export type ProxyHandle = {
@@ -1487,6 +1495,12 @@ async function uploadDataUriToHost(dataUri: string): Promise<string> {
  * Returns a handle with the assigned port, base URL, and a close function.
  */
 export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
+  // Apply upstream proxy (SOCKS5/HTTP) before any outgoing requests
+  const upstreamProxy = await applyUpstreamProxy(options.upstreamProxy);
+  if (upstreamProxy) {
+    console.log(`[ClawRouter] Upstream proxy: ${upstreamProxy}`);
+  }
+
   // Normalize wallet config: string = EVM-only, object = full resolution
   const walletKey = typeof options.wallet === "string" ? options.wallet : options.wallet.key;
   const solanaPrivateKeyBytes =
@@ -1695,6 +1709,9 @@ export async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
         };
         if (solanaAddress) {
           response.solana = solanaAddress;
+        }
+        if (upstreamProxy) {
+          response.upstreamProxy = upstreamProxy;
         }
 
         if (full) {
