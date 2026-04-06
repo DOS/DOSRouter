@@ -15,8 +15,10 @@ import (
 	"strings"
 
 	"github.com/DOS/DOSRouter/models"
+	"github.com/DOS/DOSRouter/partners"
 	"github.com/DOS/DOSRouter/proxy"
 	"github.com/DOS/DOSRouter/router"
+	"github.com/DOS/DOSRouter/stats"
 )
 
 func main() {
@@ -32,6 +34,12 @@ func main() {
 		cmdClassify()
 	case "models":
 		cmdModels()
+	case "stats":
+		cmdStats()
+	case "logs":
+		cmdLogs()
+	case "partners":
+		cmdPartners()
 	case "version":
 		fmt.Println("DOSRouter v1.0.0 (ported from ClawRouter)")
 	default:
@@ -44,18 +52,18 @@ func printUsage() {
 	fmt.Println(`DOSRouter - Smart LLM Router
 
 Usage:
-  dosrouter serve     Start the proxy server
-  dosrouter classify  Classify a prompt's complexity
-  dosrouter models    List available models
-  dosrouter version   Show version
+  dosrouter serve              Start the proxy server
+  dosrouter classify "prompt"  Classify a prompt's complexity
+  dosrouter models             List available models with pricing
+  dosrouter stats [--days N]   Usage statistics (default: 7 days)
+  dosrouter logs [--days N]    Per-request log (default: 1 day)
+  dosrouter partners           List available partner APIs
+  dosrouter version            Show version
 
 Serve flags:
   --port PORT          Listen port (default: 8080)
   --upstream URL       Upstream API base URL
-  --api-key KEY        API key for upstream
-
-Classify:
-  dosrouter classify "your prompt here"`)
+  --api-key KEY        API key for upstream`)
 }
 
 func cmdServe() {
@@ -169,5 +177,49 @@ func cmdModels() {
 			tagStr = " [" + strings.Join(tags, ", ") + "]"
 		}
 		fmt.Printf("  %-40s %s%s\n", m.ID, pricing, tagStr)
+	}
+}
+
+func cmdStats() {
+	days := 7
+	for i := 2; i < len(os.Args); i++ {
+		if os.Args[i] == "--days" && i+1 < len(os.Args) {
+			if d, err := strconv.Atoi(os.Args[i+1]); err == nil {
+				days = d
+			}
+			i++
+		}
+	}
+	s := stats.GetStats(days)
+	fmt.Println(stats.FormatStatsASCII(s))
+}
+
+func cmdLogs() {
+	days := 1
+	for i := 2; i < len(os.Args); i++ {
+		if os.Args[i] == "--days" && i+1 < len(os.Args) {
+			if d, err := strconv.Atoi(os.Args[i+1]); err == nil {
+				days = d
+			}
+			i++
+		}
+	}
+	fmt.Println(stats.FormatRecentLogs(days))
+}
+
+func cmdPartners() {
+	services := partners.PartnerServices
+	if len(services) == 0 {
+		fmt.Println("No partner APIs available.")
+		return
+	}
+
+	fmt.Printf("\nDOSRouter Partner APIs (%d services)\n\n", len(services))
+	for _, svc := range services {
+		fmt.Printf("  %s\n", svc.Name)
+		fmt.Printf("    %s\n", svc.Description)
+		fmt.Printf("    Tool:    dosrouter_%s\n", svc.ID)
+		fmt.Printf("    Method:  %s %s\n", svc.Method, svc.BaseURL)
+		fmt.Println()
 	}
 }

@@ -15,9 +15,20 @@ import (
 	"strings"
 	"time"
 
+	"github.com/DOS/DOSRouter/cache"
+	"github.com/DOS/DOSRouter/compression"
+	"github.com/DOS/DOSRouter/dedup"
+	"github.com/DOS/DOSRouter/journal"
+	"github.com/DOS/DOSRouter/logger"
 	"github.com/DOS/DOSRouter/models"
+	"github.com/DOS/DOSRouter/retry"
 	"github.com/DOS/DOSRouter/router"
+	"github.com/DOS/DOSRouter/session"
+	"github.com/DOS/DOSRouter/spendcontrol"
 )
+
+// Version is set at build time or defaults to "dev".
+var Version = "1.0.0"
 
 // Config controls the proxy server behavior.
 type Config struct {
@@ -37,6 +48,13 @@ type Server struct {
 	routingConfig router.RoutingConfig
 	modelPricing  map[string]router.ModelPricing
 	httpClient    *http.Client
+
+	// Middleware components
+	dedup        *dedup.Deduplicator
+	cache        *cache.Cache
+	sessions     *session.Store
+	journal      *journal.SessionJournal
+	spendControl *spendcontrol.SpendControl
 }
 
 // New creates a new proxy server.
@@ -53,7 +71,17 @@ func New(cfg Config) *Server {
 		httpClient: &http.Client{
 			Timeout: 5 * time.Minute,
 		},
+		dedup:        dedup.New(),
+		cache:        cache.New(),
+		sessions:     session.NewStore(nil),
+		journal:      journal.New(nil),
+		spendControl: mustSpendControl(),
 	}
+}
+
+// Close shuts down the proxy server and its components.
+func (s *Server) Close() {
+	s.sessions.Close()
 }
 
 // ListenAndServe starts the proxy server.
@@ -63,6 +91,7 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/v1/models", s.handleModels)
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/debug", s.handleDebug)
+	mux.HandleFunc("/cache", s.handleCacheStats)
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	log.Printf("DOSRouter proxy listening on %s (upstream: %s)", addr, s.config.UpstreamBase)
@@ -89,6 +118,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	startTime := time.Now()
 
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
@@ -103,11 +133,52 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// --- Session tracking ---
+	sessionID := session.GetSessionID(flattenHeaders(r.Header), "")
+	if sessionID == "" {
+		// Derive from first user message
+		var msgs []session.Message
+		for _, m := range req.Messages {
+			var content string
+			if len(m.Content) > 0 && m.Content[0] == '"' {
+				json.Unmarshal(m.Content, &content)
+			}
+			msgs = append(msgs, session.Message{Role: m.Role, Content: content})
+		}
+		sessionID = session.DeriveSessionID(msgs)
+	}
+
+	// --- Response cache check (non-streaming only) ---
+	if !req.Stream {
+		if entry, ok := s.cache.Get(body, false); ok {
+			w.Header().Set("X-DOSRouter-Cache", "hit")
+			for k, vs := range entry.Header {
+				for _, v := range vs {
+					w.Header().Add(k, v)
+				}
+			}
+			w.WriteHeader(entry.StatusCode)
+			w.Write(entry.Body)
+			return
+		}
+	}
+
 	// Resolve model alias
 	resolvedModel := models.ResolveModelAlias(req.Model)
 	isSmartRoute := resolvedModel == "auto" || resolvedModel == "eco" || resolvedModel == "premium"
 
 	var decision *router.RoutingDecision
+	if isSmartRoute {
+		// Check session pin first
+		if sessionID != "" {
+			if entry := s.sessions.Get(sessionID); entry != nil {
+				resolvedModel = entry.Model
+				isSmartRoute = false
+				w.Header().Set("X-DOSRouter-Session", "pinned")
+			}
+		}
+	}
+
 	if isSmartRoute {
 		// Extract prompt and system prompt from messages
 		prompt, systemPrompt := extractPrompts(req.Messages)
@@ -136,6 +207,51 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 		decision = &d
 		resolvedModel = d.Model
+
+		// --- Spend control check ---
+		if decision.CostEstimate > 0 {
+			check := s.spendControl.Check(decision.CostEstimate)
+			if !check.Allowed {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusTooManyRequests)
+				json.NewEncoder(w).Encode(map[string]interface{}{
+					"error":     check.Reason,
+					"blockedBy": check.BlockedBy,
+					"remaining": check.Remaining,
+					"resetIn":   check.ResetIn,
+				})
+				return
+			}
+		}
+
+		// Pin to session
+		if sessionID != "" {
+			s.sessions.Set(sessionID, resolvedModel, string(d.Tier))
+		}
+	}
+
+	// --- Context compression (if enabled) ---
+	compMsgs := toNormalizedMessages(req.Messages)
+	if compression.ShouldCompress(compMsgs) {
+		result := compression.CompressContext(compMsgs, compression.DefaultCompressionConfig())
+		if result.Stats.Ratio < 0.95 && result.Stats.Ratio > 0 {
+			// Re-marshal with compressed messages
+			compReq := req
+			compReq.Messages = fromNormalizedMessages(result.Messages)
+			if b, err := json.Marshal(compReq); err == nil {
+				body = b // Use compressed body for upstream
+			}
+		}
+	}
+
+	// --- Journal: inject context if needed ---
+	if sessionID != "" {
+		prompt, _ := extractPrompts(req.Messages)
+		if s.journal.NeedsContext(prompt) {
+			if ctx := s.journal.Format(sessionID); ctx != "" {
+				w.Header().Set("X-DOSRouter-Journal", "injected")
+			}
+		}
 	}
 
 	// Rewrite model in request body
@@ -156,29 +272,31 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-DOSRouter-Reasoning", decision.Reasoning)
 	}
 
-	// Forward to upstream
+	// Forward to upstream with retry
 	upstreamURL := fmt.Sprintf("%s/v1/chat/completions", s.config.UpstreamBase)
-	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, bytes.NewReader(newBody))
-	if err != nil {
-		http.Error(w, "Failed to create upstream request", http.StatusInternalServerError)
-		return
+	makeReq := func() (*http.Request, error) {
+		upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, bytes.NewReader(newBody))
+		if err != nil {
+			return nil, err
+		}
+		upstreamReq.Header.Set("Content-Type", "application/json")
+		if s.config.UpstreamAPIKey != "" {
+			upstreamReq.Header.Set("Authorization", "Bearer "+s.config.UpstreamAPIKey)
+		} else {
+			upstreamReq.Header.Set("Authorization", r.Header.Get("Authorization"))
+		}
+		return upstreamReq, nil
 	}
 
-	upstreamReq.Header.Set("Content-Type", "application/json")
-	if s.config.UpstreamAPIKey != "" {
-		upstreamReq.Header.Set("Authorization", "Bearer "+s.config.UpstreamAPIKey)
-	}
-	// Forward original auth header if no upstream key configured
-	if s.config.UpstreamAPIKey == "" {
-		upstreamReq.Header.Set("Authorization", r.Header.Get("Authorization"))
-	}
-
-	resp, err := s.httpClient.Do(upstreamReq)
+	resp, err := retry.Do(r.Context(), makeReq, retry.WithClient(s.httpClient))
 	if err != nil {
 		http.Error(w, "Upstream error: "+err.Error(), http.StatusBadGateway)
+		s.logRequest(resolvedModel, decision, startTime, "error")
 		return
 	}
 	defer resp.Body.Close()
+
+	latencyMs := time.Since(startTime).Milliseconds()
 
 	// Stream response back
 	if req.Stream {
@@ -190,6 +308,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		flusher, ok := w.(http.Flusher)
 		if !ok {
 			io.Copy(w, resp.Body)
+			s.logRequest(resolvedModel, decision, startTime, "success")
 			return
 		}
 
@@ -201,6 +320,15 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 	} else {
+		respBody, _ := io.ReadAll(resp.Body)
+
+		// Cache the response
+		s.cache.Set(body, cache.Entry{
+			Body:       respBody,
+			StatusCode: resp.StatusCode,
+			Header:     resp.Header,
+		})
+
 		// Copy headers
 		for k, v := range resp.Header {
 			for _, vv := range v {
@@ -208,8 +336,102 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		w.WriteHeader(resp.StatusCode)
-		io.Copy(w, resp.Body)
+		w.Write(respBody)
+
+		// Journal: extract events from response
+		if sessionID != "" {
+			var respData struct {
+				Choices []struct {
+					Message struct {
+						Content string `json:"content"`
+					} `json:"message"`
+				} `json:"choices"`
+			}
+			if json.Unmarshal(respBody, &respData) == nil && len(respData.Choices) > 0 {
+				events := s.journal.ExtractEvents(respData.Choices[0].Message.Content)
+				if len(events) > 0 {
+					s.journal.Record(sessionID, events, resolvedModel)
+				}
+			}
+		}
 	}
+
+	// Record spend
+	if decision != nil && decision.CostEstimate > 0 {
+		_ = s.spendControl.Record(decision.CostEstimate, resolvedModel, "chat")
+		if sessionID != "" {
+			s.sessions.AddCost(sessionID, int64(decision.CostEstimate*1_000_000))
+		}
+	}
+
+	// Log usage
+	_ = latencyMs
+	s.logRequest(resolvedModel, decision, startTime, "success")
+}
+
+func (s *Server) logRequest(model string, decision *router.RoutingDecision, startTime time.Time, status string) {
+	tier := "DIRECT"
+	cost := 0.0
+	baselineCost := 0.0
+	savings := 0.0
+	if decision != nil {
+		tier = string(decision.Tier)
+		cost = decision.CostEstimate
+		baselineCost = decision.BaselineCost
+		savings = decision.Savings
+	}
+	logger.LogUsage(logger.UsageEntry{
+		Timestamp:    time.Now().UTC().Format(time.RFC3339),
+		Model:        model,
+		Tier:         tier,
+		Cost:         cost,
+		BaselineCost: baselineCost,
+		Savings:      savings,
+		LatencyMs:    time.Since(startTime).Milliseconds(),
+		Status:       status,
+	})
+}
+
+func mustSpendControl() *spendcontrol.SpendControl {
+	sc, err := spendcontrol.New(spendcontrol.NewFileStorage())
+	if err != nil {
+		// Non-fatal: start with empty state
+		sc, _ = spendcontrol.New(nil)
+	}
+	return sc
+}
+
+func flattenHeaders(h http.Header) map[string]string {
+	flat := make(map[string]string, len(h))
+	for k, v := range h {
+		if len(v) > 0 {
+			flat[strings.ToLower(k)] = v[0]
+		}
+	}
+	return flat
+}
+
+func toNormalizedMessages(msgs []chatMessage) []compression.NormalizedMessage {
+	result := make([]compression.NormalizedMessage, len(msgs))
+	for i, m := range msgs {
+		var content string
+		if len(m.Content) > 0 && m.Content[0] == '"' {
+			json.Unmarshal(m.Content, &content)
+		} else {
+			content = string(m.Content)
+		}
+		result[i] = compression.NormalizedMessage{Role: m.Role, Content: content}
+	}
+	return result
+}
+
+func fromNormalizedMessages(msgs []compression.NormalizedMessage) []chatMessage {
+	result := make([]chatMessage, len(msgs))
+	for i, m := range msgs {
+		content, _ := json.Marshal(m.GetTextContent())
+		result[i] = chatMessage{Role: m.Role, Content: content}
+	}
+	return result
 }
 
 func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
@@ -242,10 +464,26 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]interface{}{
+	resp := map[string]interface{}{
 		"status":  "ok",
-		"version": "1.0.0",
-	})
+		"version": Version,
+	}
+	// Full health includes session/journal stats
+	if r.URL.Query().Get("full") == "true" {
+		sessCount, _ := s.sessions.GetStats()
+		jSess, jEntries := s.journal.GetStats()
+		resp["sessions"] = sessCount
+		resp["journalSessions"] = jSess
+		resp["journalEntries"] = jEntries
+		resp["spendControl"] = s.spendControl.GetStatus()
+	}
+	json.NewEncoder(w).Encode(resp)
+}
+
+func (s *Server) handleCacheStats(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	stats := s.cache.Stats()
+	json.NewEncoder(w).Encode(stats)
 }
 
 // debugRequest is used for the /debug endpoint to test classification.
