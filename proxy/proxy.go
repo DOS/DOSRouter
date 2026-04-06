@@ -73,8 +73,8 @@ func New(cfg Config) *Server {
 		},
 		dedup:        dedup.New(),
 		cache:        cache.New(),
-		sessions:     session.NewStore(nil),
-		journal:      journal.New(nil),
+		sessions:     session.NewStore(session.DefaultConfig()),
+		journal:      journal.New(journal.DefaultConfig()),
 		spendControl: mustSpendControl(),
 	}
 }
@@ -134,18 +134,23 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// --- Session tracking ---
-	sessionID := session.GetSessionID(flattenHeaders(r.Header), "")
+	sessionID := session.GetSessionID(r.Header, "")
 	if sessionID == "" {
-		// Derive from first user message
-		var msgs []session.Message
+		// Derive from first user message content
 		for _, m := range req.Messages {
-			var content string
-			if len(m.Content) > 0 && m.Content[0] == '"' {
-				json.Unmarshal(m.Content, &content)
+			if m.Role == "user" {
+				var content string
+				if len(m.Content) > 0 && m.Content[0] == '"' {
+					json.Unmarshal(m.Content, &content)
+				} else {
+					content = string(m.Content)
+				}
+				if content != "" {
+					sessionID = session.DeriveSessionID(content)
+					break
+				}
 			}
-			msgs = append(msgs, session.Message{Role: m.Role, Content: content})
 		}
-		sessionID = session.DeriveSessionID(msgs)
 	}
 
 	// --- Response cache check (non-streaming only) ---
@@ -171,7 +176,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if isSmartRoute {
 		// Check session pin first
 		if sessionID != "" {
-			if entry := s.sessions.Get(sessionID); entry != nil {
+			if entry := s.sessions.GetSession(sessionID); entry != nil {
 				resolvedModel = entry.Model
 				isSmartRoute = false
 				w.Header().Set("X-DOSRouter-Session", "pinned")
@@ -226,7 +231,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 		// Pin to session
 		if sessionID != "" {
-			s.sessions.Set(sessionID, resolvedModel, string(d.Tier))
+			s.sessions.SetSession(sessionID, resolvedModel, d.Tier)
 		}
 	}
 
@@ -360,7 +365,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	if decision != nil && decision.CostEstimate > 0 {
 		_ = s.spendControl.Record(decision.CostEstimate, resolvedModel, "chat")
 		if sessionID != "" {
-			s.sessions.AddCost(sessionID, int64(decision.CostEstimate*1_000_000))
+			s.sessions.AddSessionCost(sessionID, int64(decision.CostEstimate*1_000_000))
 		}
 	}
 
@@ -470,11 +475,11 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	}
 	// Full health includes session/journal stats
 	if r.URL.Query().Get("full") == "true" {
-		sessCount, _ := s.sessions.GetStats()
-		jSess, jEntries := s.journal.GetStats()
-		resp["sessions"] = sessCount
-		resp["journalSessions"] = jSess
-		resp["journalEntries"] = jEntries
+		sessStats := s.sessions.GetStats()
+		jStats := s.journal.GetStats()
+		resp["sessions"] = sessStats.Count
+		resp["journalSessions"] = jStats.Sessions
+		resp["journalEntries"] = jStats.TotalEntries
 		resp["spendControl"] = s.spendControl.GetStatus()
 	}
 	json.NewEncoder(w).Encode(resp)

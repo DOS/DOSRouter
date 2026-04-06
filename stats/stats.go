@@ -1,87 +1,100 @@
-// Package stats provides usage statistics aggregation and ASCII formatting.
-// It reads JSONL log files produced by the logger package and generates
-// terminal-friendly reports.
+// Package stats parses JSONL usage log files and computes aggregate statistics
+// with ASCII-formatted output.
 package stats
 
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/DOS/DOSRouter/logger"
 )
 
-// DailyStats holds aggregated stats for a single day.
-type DailyStats struct {
-	Date             string                        `json:"date"`
-	TotalRequests    int                           `json:"totalRequests"`
-	TotalCost        float64                       `json:"totalCost"`
-	TotalBaselineCost float64                      `json:"totalBaselineCost"`
-	TotalSavings     float64                       `json:"totalSavings"`
-	AvgLatencyMs     float64                       `json:"avgLatencyMs"`
-	ByTier           map[string]*TierModelStat     `json:"byTier"`
-	ByModel          map[string]*TierModelStat     `json:"byModel"`
-}
-
-// TierModelStat holds count and cost for a tier or model.
-type TierModelStat struct {
+// TierStats holds per-tier aggregate data.
+type TierStats struct {
 	Count      int     `json:"count"`
 	Cost       float64 `json:"cost"`
-	Percentage float64 `json:"percentage,omitempty"`
+	Percentage float64 `json:"percentage"`
 }
 
-// AggregatedStats holds stats aggregated over multiple days.
+// ModelStats holds per-model aggregate data.
+type ModelStats struct {
+	Count      int     `json:"count"`
+	Cost       float64 `json:"cost"`
+	Percentage float64 `json:"percentage"`
+}
+
+// DayStats holds one day of aggregated usage.
+type DayStats struct {
+	Date              string                `json:"date"`
+	TotalRequests     int                   `json:"totalRequests"`
+	TotalCost         float64               `json:"totalCost"`
+	TotalBaselineCost float64               `json:"totalBaselineCost"`
+	TotalSavings      float64               `json:"totalSavings"`
+	AvgLatencyMs      float64               `json:"avgLatencyMs"`
+	ByTier            map[string]TierStats  `json:"byTier"`
+	ByModel           map[string]ModelStats `json:"byModel"`
+}
+
+// AggregatedStats is the top-level stats result.
 type AggregatedStats struct {
-	Period              string                        `json:"period"`
-	TotalRequests       int                           `json:"totalRequests"`
-	TotalCost           float64                       `json:"totalCost"`
-	TotalBaselineCost   float64                       `json:"totalBaselineCost"`
-	TotalSavings        float64                       `json:"totalSavings"`
-	SavingsPercentage   float64                       `json:"savingsPercentage"`
-	AvgLatencyMs        float64                       `json:"avgLatencyMs"`
-	AvgCostPerRequest   float64                       `json:"avgCostPerRequest"`
-	ByTier              map[string]*TierModelStat     `json:"byTier"`
-	ByModel             map[string]*TierModelStat     `json:"byModel"`
-	DailyBreakdown      []DailyStats                  `json:"dailyBreakdown"`
-	EntriesWithBaseline int                           `json:"entriesWithBaseline"`
+	Period              string                `json:"period"`
+	TotalRequests       int                   `json:"totalRequests"`
+	TotalCost           float64               `json:"totalCost"`
+	TotalBaselineCost   float64               `json:"totalBaselineCost"`
+	TotalSavings        float64               `json:"totalSavings"`
+	SavingsPercentage   float64               `json:"savingsPercentage"`
+	AvgLatencyMs        float64               `json:"avgLatencyMs"`
+	AvgCostPerRequest   float64               `json:"avgCostPerRequest"`
+	ByTier              map[string]TierStats  `json:"byTier"`
+	ByModel             map[string]ModelStats `json:"byModel"`
+	DailyBreakdown      []DayStats            `json:"dailyBreakdown"`
+	EntriesWithBaseline int                   `json:"entriesWithBaseline"`
 }
 
-// parseLogFile reads and parses a JSONL log file.
-func parseLogFile(filePath string) []logger.UsageEntry {
-	data, err := os.ReadFile(filePath)
-	if err != nil {
-		return nil
-	}
+type logEntry struct {
+	Timestamp    string  `json:"timestamp"`
+	Model        string  `json:"model"`
+	Tier         string  `json:"tier"`
+	Cost         float64 `json:"cost"`
+	BaselineCost float64 `json:"baselineCost"`
+	Savings      float64 `json:"savings"`
+	LatencyMs    int64   `json:"latencyMs"`
+	Status       string  `json:"status"`
+	InputTokens  int     `json:"inputTokens"`
+	OutputTokens int     `json:"outputTokens"`
+}
 
+func parseLogFile(filePath string) []logEntry {
+	data, err := os.ReadFile(filePath)
+	if err != nil { return nil }
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
-	var entries []logger.UsageEntry
+	entries := make([]logEntry, 0, len(lines))
 	for _, line := range lines {
-		if line == "" {
-			continue
-		}
-		var entry logger.UsageEntry
-		if err := json.Unmarshal([]byte(line), &entry); err != nil {
-			continue
-		}
-		entries = append(entries, entry)
+		if line == "" { continue }
+		var e logEntry
+		if err := json.Unmarshal([]byte(line), &e); err != nil { continue }
+		if e.Timestamp == "" { e.Timestamp = time.Now().Format(time.RFC3339) }
+		if e.Model == "" { e.Model = "unknown" }
+		if e.Tier == "" { e.Tier = "UNKNOWN" }
+		if e.BaselineCost == 0 { e.BaselineCost = e.Cost }
+		entries = append(entries, e)
 	}
 	return entries
 }
 
-// getLogFiles returns available log files sorted newest first.
 func getLogFiles() []string {
-	logDir := logger.GetLogDir()
-	entries, err := os.ReadDir(logDir)
-	if err != nil {
-		return nil
-	}
-
+	dir := logger.LogDir()
+	dirEntries, err := os.ReadDir(dir)
+	if err != nil { return nil }
 	var files []string
-	for _, e := range entries {
-		name := e.Name()
+	for _, de := range dirEntries {
+		name := de.Name()
 		if strings.HasPrefix(name, "usage-") && strings.HasSuffix(name, ".jsonl") {
 			files = append(files, name)
 		}
@@ -90,355 +103,196 @@ func getLogFiles() []string {
 	return files
 }
 
-// aggregateDay computes stats for a single day's entries.
-func aggregateDay(date string, entries []logger.UsageEntry) DailyStats {
-	byTier := make(map[string]*TierModelStat)
-	byModel := make(map[string]*TierModelStat)
+func aggregateDay(date string, entries []logEntry) DayStats {
+	byTier := make(map[string]TierStats)
+	byModel := make(map[string]ModelStats)
 	var totalLatency int64
-
+	var totalCost, totalBaselineCost float64
 	for _, e := range entries {
-		tier := e.Tier
-		if tier == "" {
-			tier = "UNKNOWN"
-		}
-		if byTier[tier] == nil {
-			byTier[tier] = &TierModelStat{}
-		}
-		byTier[tier].Count++
-		byTier[tier].Cost += e.Cost
-
-		model := e.Model
-		if model == "" {
-			model = "unknown"
-		}
-		if byModel[model] == nil {
-			byModel[model] = &TierModelStat{}
-		}
-		byModel[model].Count++
-		byModel[model].Cost += e.Cost
-
+		ts := byTier[e.Tier]; ts.Count++; ts.Cost += e.Cost; byTier[e.Tier] = ts
+		ms := byModel[e.Model]; ms.Count++; ms.Cost += e.Cost; byModel[e.Model] = ms
 		totalLatency += e.LatencyMs
-	}
-
-	totalCost := 0.0
-	totalBaseline := 0.0
-	for _, e := range entries {
 		totalCost += e.Cost
-		bl := e.BaselineCost
-		if bl == 0 {
-			bl = e.Cost
-		}
-		totalBaseline += bl
+		totalBaselineCost += e.BaselineCost
 	}
-
-	avgLatency := 0.0
-	if len(entries) > 0 {
-		avgLatency = float64(totalLatency) / float64(len(entries))
-	}
-
-	return DailyStats{
-		Date:              date,
-		TotalRequests:     len(entries),
-		TotalCost:         totalCost,
-		TotalBaselineCost: totalBaseline,
-		TotalSavings:      totalBaseline - totalCost,
-		AvgLatencyMs:      avgLatency,
-		ByTier:            byTier,
-		ByModel:           byModel,
+	avgLat := 0.0
+	if len(entries) > 0 { avgLat = float64(totalLatency) / float64(len(entries)) }
+	return DayStats{
+		Date: date, TotalRequests: len(entries), TotalCost: totalCost,
+		TotalBaselineCost: totalBaselineCost, TotalSavings: totalBaselineCost - totalCost,
+		AvgLatencyMs: avgLat, ByTier: byTier, ByModel: byModel,
 	}
 }
 
-// GetStats returns aggregated statistics for the last N days.
+// GetStats reads log files and returns aggregated statistics for the given number of days.
 func GetStats(days int) AggregatedStats {
-	if days <= 0 {
-		days = 7
-	}
-
+	if days <= 0 { days = 7 }
 	logFiles := getLogFiles()
-	if len(logFiles) > days {
-		logFiles = logFiles[:days]
-	}
-
-	logDir := logger.GetLogDir()
-	var dailyBreakdown []DailyStats
-	allByTier := make(map[string]*TierModelStat)
-	allByModel := make(map[string]*TierModelStat)
+	if len(logFiles) > days { logFiles = logFiles[:days] }
+	dir := logger.LogDir()
+	var dailyBreakdown []DayStats
+	allByTier := make(map[string]TierStats)
+	allByModel := make(map[string]ModelStats)
 	var totalRequests int
 	var totalCost, totalBaselineCost, totalLatency float64
-
 	for _, file := range logFiles {
 		date := strings.TrimSuffix(strings.TrimPrefix(file, "usage-"), ".jsonl")
-		entries := parseLogFile(filepath.Join(logDir, file))
-		if len(entries) == 0 {
-			continue
+		entries := parseLogFile(filepath.Join(dir, file))
+		if len(entries) == 0 { continue }
+		day := aggregateDay(date, entries)
+		dailyBreakdown = append(dailyBreakdown, day)
+		totalRequests += day.TotalRequests
+		totalCost += day.TotalCost
+		totalBaselineCost += day.TotalBaselineCost
+		totalLatency += day.AvgLatencyMs * float64(day.TotalRequests)
+		for tier, ts := range day.ByTier {
+			a := allByTier[tier]; a.Count += ts.Count; a.Cost += ts.Cost; allByTier[tier] = a
 		}
-
-		dayStats := aggregateDay(date, entries)
-		dailyBreakdown = append(dailyBreakdown, dayStats)
-
-		totalRequests += dayStats.TotalRequests
-		totalCost += dayStats.TotalCost
-		totalBaselineCost += dayStats.TotalBaselineCost
-		totalLatency += dayStats.AvgLatencyMs * float64(dayStats.TotalRequests)
-
-		for tier, s := range dayStats.ByTier {
-			if allByTier[tier] == nil {
-				allByTier[tier] = &TierModelStat{}
-			}
-			allByTier[tier].Count += s.Count
-			allByTier[tier].Cost += s.Cost
-		}
-		for model, s := range dayStats.ByModel {
-			if allByModel[model] == nil {
-				allByModel[model] = &TierModelStat{}
-			}
-			allByModel[model].Count += s.Count
-			allByModel[model].Cost += s.Cost
+		for model, ms := range day.ByModel {
+			a := allByModel[model]; a.Count += ms.Count; a.Cost += ms.Cost; allByModel[model] = a
 		}
 	}
-
-	// Calculate percentages
-	for _, s := range allByTier {
-		if totalRequests > 0 {
-			s.Percentage = float64(s.Count) / float64(totalRequests) * 100
-		}
+	for k, v := range allByTier {
+		if totalRequests > 0 { v.Percentage = float64(v.Count) / float64(totalRequests) * 100 }
+		allByTier[k] = v
 	}
-	for _, s := range allByModel {
-		if totalRequests > 0 {
-			s.Percentage = float64(s.Count) / float64(totalRequests) * 100
-		}
+	for k, v := range allByModel {
+		if totalRequests > 0 { v.Percentage = float64(v.Count) / float64(totalRequests) * 100 }
+		allByModel[k] = v
 	}
-
 	totalSavings := totalBaselineCost - totalCost
-	savingsPercentage := 0.0
-	if totalBaselineCost > 0 {
-		savingsPercentage = totalSavings / totalBaselineCost * 100
-	}
-
-	entriesWithBaseline := 0
-	for _, day := range dailyBreakdown {
-		if day.TotalBaselineCost != day.TotalCost {
-			entriesWithBaseline += day.TotalRequests
-		}
-	}
-
-	// Reverse daily breakdown (oldest first)
-	for i, j := 0, len(dailyBreakdown)-1; i < j; i, j = i+1, j-1 {
-		dailyBreakdown[i], dailyBreakdown[j] = dailyBreakdown[j], dailyBreakdown[i]
-	}
-
-	period := "today"
-	if days != 1 {
-		period = fmt.Sprintf("last %d days", days)
-	}
-
-	avgLatency := 0.0
-	avgCost := 0.0
+	savingsPct := 0.0
+	if totalBaselineCost > 0 { savingsPct = totalSavings / totalBaselineCost * 100 }
+	avgLatency, avgCost := 0.0, 0.0
 	if totalRequests > 0 {
 		avgLatency = totalLatency / float64(totalRequests)
 		avgCost = totalCost / float64(totalRequests)
 	}
-
+	var entriesWithBaseline int
+	for _, day := range dailyBreakdown {
+		if day.TotalBaselineCost != day.TotalCost { entriesWithBaseline += day.TotalRequests }
+	}
+	// Reverse so oldest first.
+	for i, j := 0, len(dailyBreakdown)-1; i < j; i, j = i+1, j-1 {
+		dailyBreakdown[i], dailyBreakdown[j] = dailyBreakdown[j], dailyBreakdown[i]
+	}
+	period := "today"
+	if days != 1 { period = fmt.Sprintf("last %d days", days) }
 	return AggregatedStats{
-		Period:              period,
-		TotalRequests:       totalRequests,
-		TotalCost:           totalCost,
-		TotalBaselineCost:   totalBaselineCost,
-		TotalSavings:        totalSavings,
-		SavingsPercentage:   savingsPercentage,
-		AvgLatencyMs:        avgLatency,
-		AvgCostPerRequest:   avgCost,
-		ByTier:              allByTier,
-		ByModel:             allByModel,
-		DailyBreakdown:      dailyBreakdown,
+		Period: period, TotalRequests: totalRequests, TotalCost: totalCost,
+		TotalBaselineCost: totalBaselineCost, TotalSavings: totalSavings,
+		SavingsPercentage: savingsPct, AvgLatencyMs: avgLatency, AvgCostPerRequest: avgCost,
+		ByTier: allByTier, ByModel: allByModel, DailyBreakdown: dailyBreakdown,
 		EntriesWithBaseline: entriesWithBaseline,
 	}
 }
 
-// Version placeholder (set at build time or from main).
-var Version = "dev"
-
-// FormatStatsASCII formats stats as an ASCII table for terminal display.
+// FormatStatsASCII renders aggregated stats as an ASCII box art table.
 func FormatStatsASCII(s AggregatedStats) string {
 	var b strings.Builder
-
-	b.WriteString("+" + strings.Repeat("=", 60) + "+\n")
-	b.WriteString(fmt.Sprintf("|  DOSRouter v%-47s|\n", Version))
-	b.WriteString("|  Usage Statistics" + strings.Repeat(" ", 42) + "|\n")
-	b.WriteString("+" + strings.Repeat("=", 60) + "+\n")
-
-	b.WriteString(fmt.Sprintf("|  Period: %-51s|\n", s.Period))
-	b.WriteString(fmt.Sprintf("|  Total Requests: %-42d|\n", s.TotalRequests))
-	b.WriteString(fmt.Sprintf("|  Total Cost: $%-46.4f|\n", s.TotalCost))
-	b.WriteString(fmt.Sprintf("|  Baseline Cost (Opus 4.5): $%-31.4f|\n", s.TotalBaselineCost))
-	b.WriteString(fmt.Sprintf("|  Total Saved: $%.4f (%.1f%%)%s|\n",
-		s.TotalSavings, s.SavingsPercentage,
-		strings.Repeat(" ", max(0, 38-len(fmt.Sprintf("%.4f (%.1f%%)", s.TotalSavings, s.SavingsPercentage))))))
-	b.WriteString(fmt.Sprintf("|  Avg Latency: %.0fms%s|\n",
-		s.AvgLatencyMs, strings.Repeat(" ", max(0, 44-len(fmt.Sprintf("%.0fms", s.AvgLatencyMs))))))
-
-	// Tier breakdown
-	b.WriteString("+" + strings.Repeat("=", 60) + "+\n")
-	b.WriteString("|  Routing by Tier:" + strings.Repeat(" ", 42) + "|\n")
-
-	knownTiers := []string{"SIMPLE", "MEDIUM", "COMPLEX", "REASONING", "DIRECT"}
-	for _, tier := range knownTiers {
-		if data, ok := s.ByTier[tier]; ok {
-			barLen := int(data.Percentage / 5)
-			if barLen > 20 {
-				barLen = 20
-			}
-			bar := strings.Repeat("#", barLen)
-			line := fmt.Sprintf("|    %-10s %-20s %5.1f%% (%d)", tier, bar, data.Percentage, data.Count)
-			b.WriteString(line + strings.Repeat(" ", max(0, 61-len(line))) + "|\n")
+	topBot := "+--------------------------------------------------+"
+	b.WriteString(topBot + "\n")
+	b.WriteString(fmt.Sprintf("| Usage Stats (%s)%s|\n", s.Period, pad(36-len(s.Period))))
+	b.WriteString(topBot + "\n")
+	b.WriteString(fmt.Sprintf("| Requests:  %-37d|\n", s.TotalRequests))
+	b.WriteString(fmt.Sprintf("| Cost:      $%-36.4f|\n", s.TotalCost))
+	if s.EntriesWithBaseline > 0 {
+		b.WriteString(fmt.Sprintf("| Baseline:  $%-36.4f|\n", s.TotalBaselineCost))
+		b.WriteString(fmt.Sprintf("| Savings:   $%-33.4f(%4.1f%%)|\n", s.TotalSavings, s.SavingsPercentage))
+	}
+	b.WriteString(fmt.Sprintf("| Avg Cost:  $%-36.6f|\n", s.AvgCostPerRequest))
+	b.WriteString(fmt.Sprintf("| Avg Latency: %-34.0fms|\n", s.AvgLatencyMs))
+	b.WriteString(topBot + "\n")
+	if len(s.ByTier) > 0 {
+		b.WriteString("| Tier Breakdown:                                  |\n")
+		b.WriteString("|   Tier       Count    Cost      Pct              |\n")
+		for _, tier := range sortedKeys(s.ByTier) {
+			ts := s.ByTier[tier]
+			bar := makeBar(ts.Percentage, 15)
+			b.WriteString(fmt.Sprintf("|   %-10s %5d  $%7.4f  %5.1f%% %s |\n", tier, ts.Count, ts.Cost, ts.Percentage, bar))
 		}
+		b.WriteString(topBot + "\n")
 	}
-
-	// Top models
-	b.WriteString("+" + strings.Repeat("=", 60) + "+\n")
-	b.WriteString("|  Top Models:" + strings.Repeat(" ", 47) + "|\n")
-
-	type modelEntry struct {
-		name string
-		stat *TierModelStat
-	}
-	var models []modelEntry
-	for name, stat := range s.ByModel {
-		models = append(models, modelEntry{name, stat})
-	}
-	sort.Slice(models, func(i, j int) bool {
-		return models[i].stat.Count > models[j].stat.Count
-	})
-	if len(models) > 5 {
-		models = models[:5]
-	}
-	for _, m := range models {
-		shortModel := m.name
-		if len(shortModel) > 25 {
-			shortModel = shortModel[:22] + "..."
+	if len(s.ByModel) > 0 {
+		b.WriteString("| Model Breakdown:                                 |\n")
+		for _, model := range sortedKeysByCount(s.ByModel) {
+			ms := s.ByModel[model]
+			name := model
+			if len(name) > 25 { name = name[:22] + "..." }
+			b.WriteString(fmt.Sprintf("|   %-25s %4d  $%7.4f %5.1f%%|\n", name, ms.Count, ms.Cost, ms.Percentage))
 		}
-		line := fmt.Sprintf("|    %-25s %5d reqs  $%.4f", shortModel, m.stat.Count, m.stat.Cost)
-		b.WriteString(line + strings.Repeat(" ", max(0, 61-len(line))) + "|\n")
+		b.WriteString(topBot + "\n")
 	}
-
-	// Daily breakdown
-	if len(s.DailyBreakdown) > 0 {
-		b.WriteString("+" + strings.Repeat("=", 60) + "+\n")
-		b.WriteString("|  Daily Breakdown:" + strings.Repeat(" ", 42) + "|\n")
-		b.WriteString("|    Date        Requests    Cost      Saved" + strings.Repeat(" ", 17) + "|\n")
-
-		breakdown := s.DailyBreakdown
-		if len(breakdown) > 7 {
-			breakdown = breakdown[len(breakdown)-7:]
-		}
-		for _, day := range breakdown {
-			saved := day.TotalBaselineCost - day.TotalCost
-			line := fmt.Sprintf("|    %s   %6d    $%8.4f  $%.4f", day.Date, day.TotalRequests, day.TotalCost, saved)
-			b.WriteString(line + strings.Repeat(" ", max(0, 61-len(line))) + "|\n")
-		}
-	}
-
-	b.WriteString("+" + strings.Repeat("=", 60) + "+\n")
 	return b.String()
 }
 
-// FormatRecentLogs formats per-request log entries as an ASCII table.
-func FormatRecentLogs(days int) string {
-	if days <= 0 {
-		days = 1
-	}
-
+// FormatRecentLogs renders individual log entries as a per-request table.
+func FormatRecentLogs(days, limit int) string {
+	if days <= 0 { days = 1 }
+	if limit <= 0 { limit = 20 }
 	logFiles := getLogFiles()
-	if len(logFiles) > days {
-		logFiles = logFiles[:days]
-	}
-
-	logDir := logger.GetLogDir()
-	var allEntries []logger.UsageEntry
+	if len(logFiles) > days { logFiles = logFiles[:days] }
+	dir := logger.LogDir()
+	var all []logEntry
 	for _, file := range logFiles {
-		entries := parseLogFile(filepath.Join(logDir, file))
-		allEntries = append(allEntries, entries...)
+		all = append(all, parseLogFile(filepath.Join(dir, file))...)
 	}
-
-	// Sort chronologically
-	sort.Slice(allEntries, func(i, j int) bool {
-		return allEntries[i].Timestamp < allEntries[j].Timestamp
-	})
-
+	sort.Slice(all, func(i, j int) bool { return all[i].Timestamp > all[j].Timestamp })
+	if len(all) > limit { all = all[:limit] }
+	if len(all) == 0 { return "No recent logs found.\n" }
 	var b strings.Builder
-	periodLabel := "24h"
-	if days != 1 {
-		periodLabel = fmt.Sprintf("%d days", days)
-	}
-
-	b.WriteString("+" + strings.Repeat("=", 72) + "+\n")
-	b.WriteString(fmt.Sprintf("|  DOSRouter Request Log - last %-41s|\n", periodLabel))
-	b.WriteString("+" + strings.Repeat("-", 18) + "+" + strings.Repeat("-", 26) + "+" +
-		strings.Repeat("-", 9) + "+" + strings.Repeat("-", 6) + "+" + strings.Repeat("-", 8) + "+\n")
-	b.WriteString("|  Time            |  Model                   |  Cost   |  ms  | Status |\n")
-	b.WriteString("+" + strings.Repeat("-", 18) + "+" + strings.Repeat("-", 26) + "+" +
-		strings.Repeat("-", 9) + "+" + strings.Repeat("-", 6) + "+" + strings.Repeat("-", 8) + "+\n")
-
-	if len(allEntries) == 0 {
-		b.WriteString("|  No requests found" + strings.Repeat(" ", 53) + "|\n")
-	}
-
-	totalCost := 0.0
-	for _, e := range allEntries {
-		ts := e.Timestamp
-		displayTime := ""
-		if len(ts) >= 19 {
-			displayTime = ts[5:10] + " " + ts[11:19]
-		}
+	b.WriteString(fmt.Sprintf("Recent Requests (last %d):\n", len(all)))
+	b.WriteString("+-----+----------------------+----------+----------+--------+\n")
+	b.WriteString("|  #  | Model                | Tier     | Cost     | Lat ms |\n")
+	b.WriteString("+-----+----------------------+----------+----------+--------+\n")
+	for i, e := range all {
 		model := e.Model
-		if len(model) > 24 {
-			model = model[:21] + "..."
-		}
-		cost := fmt.Sprintf("$%.4f", e.Cost)
-		ms := fmt.Sprintf("%dms", e.LatencyMs)
-		if e.LatencyMs > 9999 {
-			ms = fmt.Sprintf("%.1fs", float64(e.LatencyMs)/1000)
-		}
-		status := " OK     "
-		if e.Status == "error" {
-			status = " ERROR  "
-		}
-		totalCost += e.Cost
-
-		b.WriteString(fmt.Sprintf("|  %-16s|  %-24s|  %7s|  %4s|%s|\n",
-			displayTime, model, cost, ms, status))
+		if len(model) > 20 { model = model[:17] + "..." }
+		b.WriteString(fmt.Sprintf("| %3d | %-20s | %-8s | $%7.5f | %6d |\n", i+1, model, e.Tier, e.Cost, e.LatencyMs))
 	}
-
-	b.WriteString("+" + strings.Repeat("=", 72) + "+\n")
-	plural := "s"
-	if len(allEntries) == 1 {
-		plural = ""
-	}
-	b.WriteString(fmt.Sprintf("|  %d request%s  Total spent: $%.4f%s|\n",
-		len(allEntries), plural, totalCost,
-		strings.Repeat(" ", max(0, 45-len(fmt.Sprintf("%d request%s  Total spent: $%.4f", len(allEntries), plural, totalCost))))))
-	b.WriteString("|  Logs: ~/.openclaw/blockrun/logs/  (JSONL)" + strings.Repeat(" ", 29) + "|\n")
-	b.WriteString("+" + strings.Repeat("=", 72) + "+\n")
-
+	b.WriteString("+-----+----------------------+----------+----------+--------+\n")
 	return b.String()
 }
 
-// ClearStats deletes all usage log files.
-func ClearStats() int {
-	logDir := logger.GetLogDir()
-	entries, err := os.ReadDir(logDir)
+// ClearStats deletes all log files in the usage log directory.
+func ClearStats() error {
+	dir := logger.LogDir()
+	entries, err := os.ReadDir(dir)
 	if err != nil {
-		return 0
+		if os.IsNotExist(err) { return nil }
+		return err
 	}
-
-	deleted := 0
-	for _, e := range entries {
-		name := e.Name()
+	for _, de := range entries {
+		name := de.Name()
 		if strings.HasPrefix(name, "usage-") && strings.HasSuffix(name, ".jsonl") {
-			if os.Remove(filepath.Join(logDir, name)) == nil {
-				deleted++
-			}
+			_ = os.Remove(filepath.Join(dir, name))
 		}
 	}
-	return deleted
+	return nil
+}
+
+func pad(n int) string {
+	if n <= 0 { return "" }
+	return strings.Repeat(" ", n)
+}
+
+func makeBar(pct float64, maxWidth int) string {
+	filled := int(math.Round(pct / 100.0 * float64(maxWidth)))
+	if filled < 0 { filled = 0 }
+	if filled > maxWidth { filled = maxWidth }
+	return strings.Repeat("#", filled) + strings.Repeat(".", maxWidth-filled)
+}
+
+func sortedKeys(m map[string]TierStats) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m { keys = append(keys, k) }
+	sort.Strings(keys)
+	return keys
+}
+
+func sortedKeysByCount(m map[string]ModelStats) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m { keys = append(keys, k) }
+	sort.Slice(keys, func(i, j int) bool { return m[keys[i]].Count > m[keys[j]].Count })
+	return keys
 }

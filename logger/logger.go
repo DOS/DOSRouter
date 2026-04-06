@@ -1,17 +1,32 @@
-// Package logger provides usage logging as JSONL files.
-// Each LLM request is logged as a JSON line to a daily log file
-// at ~/.openclaw/blockrun/logs/usage-YYYY-MM-DD.jsonl
+// Package logger provides append-only JSONL usage logging to daily files
+// under ~/.openclaw/blockrun/logs/.
 package logger
 
 import (
 	"encoding/json"
-	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
 )
 
-// UsageEntry represents a single logged LLM request.
+// logDir is the directory for usage log files.
+var logDir string
+
+func init() {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		home = "."
+	}
+	logDir = filepath.Join(home, ".openclaw", "blockrun", "logs")
+}
+
+var dirOnce sync.Once
+
+func ensureDir() {
+	dirOnce.Do(func() { _ = os.MkdirAll(logDir, 0o755) })
+}
+
+// UsageEntry represents a single usage log record.
 type UsageEntry struct {
 	Timestamp    string  `json:"timestamp"`
 	Model        string  `json:"model"`
@@ -27,61 +42,27 @@ type UsageEntry struct {
 	Service      string  `json:"service,omitempty"`
 }
 
-var (
-	logDir   string
-	dirReady bool
-	mu       sync.Mutex
-)
-
-func init() {
-	home, _ := os.UserHomeDir()
-	logDir = filepath.Join(home, ".openclaw", "blockrun", "logs")
-}
-
-// GetLogDir returns the log directory path.
-func GetLogDir() string {
-	return logDir
-}
-
-func ensureDir() error {
-	if dirReady {
-		return nil
-	}
-	if err := os.MkdirAll(logDir, 0755); err != nil {
-		return err
-	}
-	dirReady = true
-	return nil
-}
-
-// LogUsage logs a usage entry as a JSON line. Never returns errors to
-// avoid breaking the request flow.
+// LogUsage appends a JSON line to the daily log file. It silently swallows
+// errors so it never breaks the request flow.
 func LogUsage(entry UsageEntry) {
-	mu.Lock()
-	defer mu.Unlock()
-
-	if err := ensureDir(); err != nil {
-		return
-	}
-
-	date := ""
+	ensureDir()
+	date := "unknown"
 	if len(entry.Timestamp) >= 10 {
 		date = entry.Timestamp[:10]
-	} else {
-		date = "unknown"
 	}
-
-	file := filepath.Join(logDir, fmt.Sprintf("usage-%s.jsonl", date))
-	f, err := os.OpenFile(file, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return
-	}
-	defer f.Close()
-
+	filePath := filepath.Join(logDir, "usage-"+date+".jsonl")
 	data, err := json.Marshal(entry)
 	if err != nil {
 		return
 	}
-	f.Write(data)
-	f.Write([]byte("\n"))
+	data = append(data, 10) // newline
+	f, err := os.OpenFile(filePath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	_, _ = f.Write(data)
 }
+
+// LogDir returns the path to the log directory.
+func LogDir() string { return logDir }

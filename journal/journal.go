@@ -1,5 +1,5 @@
-// Package journal provides session memory for tracking key actions
-// performed during a session, enabling agents to recall earlier work.
+// Package journal provides per-session memory of key actions extracted from
+// assistant responses, enabling context recall when users ask about earlier work.
 package journal
 
 import (
@@ -10,153 +10,142 @@ import (
 	"time"
 )
 
-// Entry is a single recorded action.
-type Entry struct {
-	Timestamp int64  `json:"timestamp"`
-	Action    string `json:"action"`
-	Model     string `json:"model,omitempty"`
-}
+const (
+	defaultMaxEntries           = 100
+	defaultMaxAgeMs             = 24 * 60 * 60 * 1000 // 24 hours
+	defaultMaxEventsPerResponse = 5
+)
 
 // Config controls journal behavior.
 type Config struct {
-	MaxEntries          int   `json:"maxEntries"`
-	MaxAgeMs            int64 `json:"maxAgeMs"`
-	MaxEventsPerResponse int  `json:"maxEventsPerResponse"`
+	MaxEntries           int
+	MaxAgeMs             int64
+	MaxEventsPerResponse int
 }
 
-// DefaultConfig returns default journal configuration.
+// DefaultConfig returns a Config with sensible defaults.
 func DefaultConfig() Config {
 	return Config{
-		MaxEntries:          100,
-		MaxAgeMs:            24 * 60 * 60 * 1000, // 24 hours
-		MaxEventsPerResponse: 5,
+		MaxEntries:           defaultMaxEntries,
+		MaxAgeMs:             defaultMaxAgeMs,
+		MaxEventsPerResponse: defaultMaxEventsPerResponse,
 	}
 }
 
-// SessionJournal maintains a compact record of key actions per session.
+// Entry is a single recorded action.
+type Entry struct {
+	Timestamp int64  // unix millis
+	Action    string
+	Model     string
+}
+
+// Stats holds journal-level statistics.
+type Stats struct {
+	Sessions     int `json:"sessions"`
+	TotalEntries int `json:"totalEntries"`
+}
+
+// SessionJournal stores per-session action journals.
 type SessionJournal struct {
-	mu       sync.RWMutex
+	mu       sync.Mutex
 	journals map[string][]Entry
 	config   Config
 }
 
-// New creates a new SessionJournal.
-func New(config *Config) *SessionJournal {
-	cfg := DefaultConfig()
-	if config != nil {
-		if config.MaxEntries > 0 {
-			cfg.MaxEntries = config.MaxEntries
-		}
-		if config.MaxAgeMs > 0 {
-			cfg.MaxAgeMs = config.MaxAgeMs
-		}
-		if config.MaxEventsPerResponse > 0 {
-			cfg.MaxEventsPerResponse = config.MaxEventsPerResponse
-		}
+// New creates a SessionJournal with the given config.
+func New(cfg Config) *SessionJournal {
+	if cfg.MaxEntries == 0 {
+		cfg.MaxEntries = defaultMaxEntries
 	}
-	return &SessionJournal{
-		journals: make(map[string][]Entry),
-		config:   cfg,
+	if cfg.MaxAgeMs == 0 {
+		cfg.MaxAgeMs = defaultMaxAgeMs
 	}
+	if cfg.MaxEventsPerResponse == 0 {
+		cfg.MaxEventsPerResponse = defaultMaxEventsPerResponse
+	}
+	return &SessionJournal{journals: make(map[string][]Entry), config: cfg}
 }
 
-// Pre-compiled patterns for extracting key actions
-var actionPatterns = []*regexp.Regexp{
-	// Creation patterns
-	regexp.MustCompile(`(?i)I (?:also |then |have )?(?:created|implemented|added|wrote|built|generated|set up|initialized) ([^.!?\n]{10,150})`),
-	// Fix patterns
-	regexp.MustCompile(`(?i)I (?:also |then |have )?(?:fixed|resolved|solved|patched|corrected|addressed|debugged) ([^.!?\n]{10,150})`),
-	// Completion patterns
-	regexp.MustCompile(`(?i)I (?:also |then |have )?(?:completed|finished|done with|wrapped up) ([^.!?\n]{10,150})`),
-	// Update patterns
-	regexp.MustCompile(`(?i)I (?:also |then |have )?(?:updated|modified|changed|refactored|improved|enhanced|optimized) ([^.!?\n]{10,150})`),
-	// Success patterns
-	regexp.MustCompile(`(?i)Successfully ([^.!?\n]{10,150})`),
-	// Tool usage patterns
-	regexp.MustCompile(`(?i)I (?:also |then |have )?(?:ran|executed|called|invoked) ([^.!?\n]{10,100})`),
+// Compiled regex patterns for event extraction.
+var eventPatterns = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)I (?:also |then |have )?(?:created|implemented|added|wrote|built|generated|set up|initialized) ([^.!?
+]{10,150})`),
+	regexp.MustCompile(`(?i)I (?:also |then |have )?(?:fixed|resolved|solved|patched|corrected|addressed|debugged) ([^.!?
+]{10,150})`),
+	regexp.MustCompile(`(?i)I (?:also |then |have )?(?:completed|finished|done with|wrapped up) ([^.!?
+]{10,150})`),
+	regexp.MustCompile(`(?i)I (?:also |then |have )?(?:updated|modified|changed|refactored|improved|enhanced|optimized) ([^.!?
+]{10,150})`),
+	regexp.MustCompile(`(?i)Successfully ([^.!?
+]{10,150})`),
+	regexp.MustCompile(`(?i)I (?:also |then |have )?(?:ran|executed|called|invoked) ([^.!?
+]{10,100})`),
 }
 
-// ExtractEvents extracts key events from assistant response content.
-func (j *SessionJournal) ExtractEvents(content string) []string {
+var contextTriggers = []string{
+	"what did you do", "what have you done", "what did we do", "what have we done",
+	"earlier", "before", "previously", "this session", "today", "so far",
+	"remind me", "summarize", "summary of", "recap",
+	"your work", "your progress", "accomplished", "achievements", "completed tasks",
+}
+
+// ExtractEvents scans assistant response content for action patterns.
+func (sj *SessionJournal) ExtractEvents(content string) []string {
 	if content == "" {
 		return nil
 	}
-
 	var events []string
-	seen := make(map[string]bool)
-
-	for _, pattern := range actionPatterns {
-		matches := pattern.FindAllString(content, -1)
-		for _, action := range matches {
+	seen := make(map[string]struct{})
+	limit := sj.config.MaxEventsPerResponse
+	for _, pattern := range eventPatterns {
+		for _, action := range pattern.FindAllString(content, -1) {
 			action = strings.TrimSpace(action)
-			normalized := strings.ToLower(action)
-			if seen[normalized] {
+			norm := strings.ToLower(action)
+			if _, dup := seen[norm]; dup {
 				continue
 			}
 			if len(action) >= 15 && len(action) <= 200 {
 				events = append(events, action)
-				seen[normalized] = true
+				seen[norm] = struct{}{}
 			}
-			if len(events) >= j.config.MaxEventsPerResponse {
-				return events
+			if len(events) >= limit {
+				break
 			}
 		}
-		if len(events) >= j.config.MaxEventsPerResponse {
-			return events
+		if len(events) >= limit {
+			break
 		}
 	}
-
 	return events
 }
 
-// Record adds events to the session journal.
-func (j *SessionJournal) Record(sessionID string, events []string, model string) {
+// Record adds extracted events to the session journal, trimming by maxAge and maxEntries.
+func (sj *SessionJournal) Record(sessionID string, events []string, model string) {
 	if sessionID == "" || len(events) == 0 {
 		return
 	}
-
-	j.mu.Lock()
-	defer j.mu.Unlock()
-
-	journal := j.journals[sessionID]
 	now := time.Now().UnixMilli()
-
+	sj.mu.Lock()
+	defer sj.mu.Unlock()
+	journal := sj.journals[sessionID]
 	for _, action := range events {
-		journal = append(journal, Entry{
-			Timestamp: now,
-			Action:    action,
-			Model:     model,
-		})
+		journal = append(journal, Entry{Timestamp: now, Action: action, Model: model})
 	}
-
-	// Trim old entries and enforce max count
-	cutoff := now - j.config.MaxAgeMs
-	filtered := make([]Entry, 0, len(journal))
+	cutoff := now - sj.config.MaxAgeMs
+	trimmed := make([]Entry, 0, len(journal))
 	for _, e := range journal {
 		if e.Timestamp > cutoff {
-			filtered = append(filtered, e)
+			trimmed = append(trimmed, e)
 		}
 	}
-	if len(filtered) > j.config.MaxEntries {
-		filtered = filtered[len(filtered)-j.config.MaxEntries:]
+	if len(trimmed) > sj.config.MaxEntries {
+		trimmed = trimmed[len(trimmed)-sj.config.MaxEntries:]
 	}
-
-	j.journals[sessionID] = filtered
+	sj.journals[sessionID] = trimmed
 }
 
-// Trigger phrases that indicate user wants historical context.
-var contextTriggers = []string{
-	"what did you do", "what have you done",
-	"what did we do", "what have we done",
-	"earlier", "before", "previously",
-	"this session", "today", "so far",
-	"remind me", "summarize", "summary of", "recap",
-	"your work", "your progress", "accomplished",
-	"achievements", "completed tasks",
-}
-
-// NeedsContext checks if the user message indicates a need for historical context.
-func (j *SessionJournal) NeedsContext(lastUserMessage string) bool {
+// NeedsContext returns true if the user message triggers session history recall.
+func (sj *SessionJournal) NeedsContext(lastUserMessage string) bool {
 	if lastUserMessage == "" {
 		return false
 	}
@@ -169,55 +158,55 @@ func (j *SessionJournal) NeedsContext(lastUserMessage string) bool {
 	return false
 }
 
-// Format returns the journal formatted for injection into system message.
-// Returns empty string if journal is empty.
-func (j *SessionJournal) Format(sessionID string) string {
-	j.mu.RLock()
-	defer j.mu.RUnlock()
-	journal := j.journals[sessionID]
-	if len(journal) == 0 {
+// Format renders the session journal as a block for system message injection.
+func (sj *SessionJournal) Format(sessionID string) string {
+	sj.mu.Lock()
+	journal := sj.journals[sessionID]
+	cp := make([]Entry, len(journal))
+	copy(cp, journal)
+	sj.mu.Unlock()
+	if len(cp) == 0 {
 		return ""
 	}
-
-	var sb strings.Builder
-	sb.WriteString("[Session Memory - Key Actions]\n")
-	for _, e := range journal {
+	var b strings.Builder
+	b.WriteString("[Session Memory - Key Actions]\n")
+	for _, e := range cp {
 		t := time.UnixMilli(e.Timestamp)
-		sb.WriteString(fmt.Sprintf("- %s: %s\n", t.Format("03:04 PM"), e.Action))
+		fmt.Fprintf(&b, "- %s: %s\n", t.Format("03:04 PM"), e.Action)
 	}
-	return sb.String()
+	return b.String()
 }
 
 // GetEntries returns raw journal entries for a session.
-func (j *SessionJournal) GetEntries(sessionID string) []Entry {
-	j.mu.RLock()
-	defer j.mu.RUnlock()
-	entries := j.journals[sessionID]
-	result := make([]Entry, len(entries))
-	copy(result, entries)
-	return result
+func (sj *SessionJournal) GetEntries(sessionID string) []Entry {
+	sj.mu.Lock()
+	defer sj.mu.Unlock()
+	out := make([]Entry, len(sj.journals[sessionID]))
+	copy(out, sj.journals[sessionID])
+	return out
 }
 
-// Clear removes journal for a specific session.
-func (j *SessionJournal) Clear(sessionID string) {
-	j.mu.Lock()
-	delete(j.journals, sessionID)
-	j.mu.Unlock()
+// Clear removes the journal for a specific session.
+func (sj *SessionJournal) Clear(sessionID string) {
+	sj.mu.Lock()
+	delete(sj.journals, sessionID)
+	sj.mu.Unlock()
 }
 
 // ClearAll removes all journals.
-func (j *SessionJournal) ClearAll() {
-	j.mu.Lock()
-	j.journals = make(map[string][]Entry)
-	j.mu.Unlock()
+func (sj *SessionJournal) ClearAll() {
+	sj.mu.Lock()
+	sj.journals = make(map[string][]Entry)
+	sj.mu.Unlock()
 }
 
-// GetStats returns journal statistics.
-func (j *SessionJournal) GetStats() (sessions int, totalEntries int) {
-	j.mu.RLock()
-	defer j.mu.RUnlock()
-	for _, entries := range j.journals {
-		totalEntries += len(entries)
+// GetStats returns aggregate statistics about the journal store.
+func (sj *SessionJournal) GetStats() Stats {
+	sj.mu.Lock()
+	defer sj.mu.Unlock()
+	total := 0
+	for _, entries := range sj.journals {
+		total += len(entries)
 	}
-	return len(j.journals), totalEntries
+	return Stats{Sessions: len(sj.journals), TotalEntries: total}
 }

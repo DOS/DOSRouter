@@ -204,7 +204,7 @@ func cmdLogs() {
 			i++
 		}
 	}
-	fmt.Println(stats.FormatRecentLogs(days))
+	fmt.Println(stats.FormatRecentLogs(days, 20))
 }
 
 func cmdPartners() {

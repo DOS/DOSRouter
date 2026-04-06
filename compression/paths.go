@@ -20,7 +20,7 @@ const (
 
 // pathRe matches Unix-style and Windows-style filesystem paths with 3+
 // segments. It captures paths like /home/user/project or C:\Users\foo\bar.
-var pathRe = regexp.MustCompile(`(?:(?:[A-Za-z]:)?[/\])(?:[^\s/\]+[/\]){2,}[^\s/\]*`)
+var pathRe = regexp.MustCompile(`(?:(?:[A-Za-z]:)?[/\\])(?:[^\s/\\]+[/\\]){2,}[^\s/\\]*`)
 
 // PathsResult holds the outcome of path compression.
 type PathsResult struct {
