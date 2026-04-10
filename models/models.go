@@ -53,8 +53,10 @@ var ModelAliases = map[string]string{
 	"gpt4":   "openai/gpt-4o",
 	"gpt5":   "openai/gpt-5.4",
 	"mini":   "openai/gpt-4o-mini",
-	"nano":   "openai/gpt-5.4-nano",
-	"codex":  "openai/gpt-5.3-codex",
+	"nano":                      "openai/gpt-5.4-nano",
+	"gpt-5.4-mini":              "openai/gpt-5.4-mini",
+	"openai-codex/gpt-5.4-mini": "openai/gpt-5.4-mini",
+	"codex":                     "openai/gpt-5.3-codex",
 	"o1":     "openai/o1",
 	"o3":     "openai/o3",
 
@@ -63,9 +65,11 @@ var ModelAliases = map[string]string{
 	"deepseek-chat": "deepseek/deepseek-chat",
 	"reasoner":      "deepseek/deepseek-reasoner",
 
-	// Kimi / Moonshot
-	"kimi":     "moonshot/kimi-k2.5",
-	"moonshot": "moonshot/kimi-k2.5",
+	// Kimi / Moonshot - nvidia-hosted is more reliable than moonshot direct API
+	"kimi":               "nvidia/kimi-k2.5",
+	"moonshot":           "nvidia/kimi-k2.5",
+	"kimi-k2.5":          "nvidia/kimi-k2.5",
+	"moonshot/kimi-k2.5": "nvidia/kimi-k2.5",
 
 	// Google
 	"gemini": "google/gemini-2.5-pro",
@@ -83,8 +87,9 @@ var ModelAliases = map[string]string{
 	"qwen-coder":   "free/qwen3-coder-480b",
 
 	// Z.AI
-	"glm":   "zai/glm-5",
-	"glm-5": "zai/glm-5",
+	"glm":     "zai/glm-5.1",
+	"glm-5":   "zai/glm-5",
+	"glm-5.1": "zai/glm-5.1",
 
 	// Routing profiles
 	"auto-router": "auto",
@@ -101,6 +106,7 @@ var Models = []ModelDef{
 
 	// OpenAI
 	{ID: "openai/gpt-5.4", Name: "GPT-5.4", Version: "5.4", InputPrice: 2.5, OutputPrice: 10.0, ContextWindow: 1_050_000, MaxOutput: 128_000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/gpt-5.4-mini", Name: "GPT-5.4 Mini", Version: "5.4", InputPrice: 0.75, OutputPrice: 4.5, ContextWindow: 400_000, MaxOutput: 128_000, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-5.4-nano", Name: "GPT-5.4 Nano", Version: "5.4", InputPrice: 0.20, OutputPrice: 1.25, ContextWindow: 1_050_000, MaxOutput: 128_000, ToolCalling: true},
 	{ID: "openai/gpt-5.4-pro", Name: "GPT-5.4 Pro", Version: "5.4", InputPrice: 21.0, OutputPrice: 168.0, ContextWindow: 1_050_000, MaxOutput: 128_000, Reasoning: true, ToolCalling: true},
 	{ID: "openai/gpt-5.3-codex", Name: "GPT-5.3 Codex", Version: "5.3", InputPrice: 1.75, OutputPrice: 14.0, ContextWindow: 400_000, MaxOutput: 128_000, Reasoning: true, Agentic: true, ToolCalling: true},
@@ -127,8 +133,9 @@ var Models = []ModelDef{
 	{ID: "deepseek/deepseek-chat", Name: "DeepSeek V3", InputPrice: 0.27, OutputPrice: 1.10, ContextWindow: 128_000, MaxOutput: 16_384, ToolCalling: true},
 	{ID: "deepseek/deepseek-reasoner", Name: "DeepSeek R1", InputPrice: 0.55, OutputPrice: 2.19, ContextWindow: 128_000, MaxOutput: 16_384, Reasoning: true},
 
-	// Moonshot / Kimi
-	{ID: "moonshot/kimi-k2.5", Name: "Kimi K2.5", Version: "2.5", InputPrice: 0.60, OutputPrice: 3.0, ContextWindow: 131_072, MaxOutput: 16_384, Agentic: true, ToolCalling: true},
+	// Kimi K2.5 - prefer nvidia-hosted (more reliable)
+	{ID: "nvidia/kimi-k2.5", Name: "Kimi K2.5", Version: "k2.5", InputPrice: 0.60, OutputPrice: 3.0, ContextWindow: 262_144, MaxOutput: 16_384, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "moonshot/kimi-k2.5", Name: "Kimi K2.5 (Moonshot)", Version: "k2.5", InputPrice: 0.60, OutputPrice: 3.0, ContextWindow: 131_072, MaxOutput: 16_384, Agentic: true, ToolCalling: true, FallbackModel: "nvidia/kimi-k2.5"},
 
 	// xAI
 	{ID: "xai/grok-4-0709", Name: "Grok 4", InputPrice: 3.0, OutputPrice: 15.0, ContextWindow: 200_000, MaxOutput: 100_000, Vision: true, ToolCalling: true},
@@ -153,8 +160,9 @@ var Models = []ModelDef{
 	{ID: "free/llama-4-maverick", Name: "Llama 4 Maverick (Free)", ContextWindow: 131_072, MaxOutput: 16_384},
 
 	// Z.AI
-	{ID: "zai/glm-5", Name: "GLM-5", InputPrice: 0.50, OutputPrice: 2.0, ContextWindow: 131_072, MaxOutput: 16_384, ToolCalling: true,
+	{ID: "zai/glm-5.1", Name: "GLM-5.1", Version: "5.1", InputPrice: 1.4, OutputPrice: 4.4, ContextWindow: 200_000, MaxOutput: 128_000, ToolCalling: true,
 		Promo: &PromoDef{FlatPrice: 0.001, StartDate: "2026-04-01", EndDate: "2026-04-15"}},
+	{ID: "zai/glm-5", Name: "GLM-5", InputPrice: 1.0, OutputPrice: 3.2, ContextWindow: 131_072, MaxOutput: 16_384, ToolCalling: true},
 	{ID: "zai/glm-5-turbo", Name: "GLM-5 Turbo", InputPrice: 0.20, OutputPrice: 0.80, ContextWindow: 131_072, MaxOutput: 16_384, ToolCalling: true},
 
 	// MiniMax

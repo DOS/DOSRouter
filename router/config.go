@@ -24,7 +24,7 @@ func DefaultRoutingConfig() RoutingConfig {
 				Fallback: []string{
 					"google/gemini-3-flash-preview",
 					"deepseek/deepseek-chat",
-					"moonshot/kimi-k2.5",
+					"nvidia/kimi-k2.5",
 					"google/gemini-3.1-flash-lite",
 					"google/gemini-2.5-flash-lite",
 					"openai/gpt-5.4-nano",
@@ -33,7 +33,7 @@ func DefaultRoutingConfig() RoutingConfig {
 				},
 			},
 			TierMedium: {
-				Primary: "moonshot/kimi-k2.5",
+				Primary: "nvidia/kimi-k2.5",
 				Fallback: []string{
 					"google/gemini-3-flash-preview",
 					"deepseek/deepseek-chat",
@@ -110,7 +110,7 @@ func DefaultRoutingConfig() RoutingConfig {
 		// Premium tier configs - best quality
 		PremiumTiers: map[Tier]TierConfig{
 			TierSimple: {
-				Primary: "moonshot/kimi-k2.5",
+				Primary: "nvidia/kimi-k2.5",
 				Fallback: []string{
 					"google/gemini-2.5-flash",
 					"anthropic/claude-haiku-4.5",
@@ -121,7 +121,7 @@ func DefaultRoutingConfig() RoutingConfig {
 			TierMedium: {
 				Primary: "openai/gpt-5.3-codex",
 				Fallback: []string{
-					"moonshot/kimi-k2.5",
+					"nvidia/kimi-k2.5",
 					"google/gemini-2.5-flash",
 					"google/gemini-2.5-pro",
 					"xai/grok-4-0709",
@@ -137,7 +137,7 @@ func DefaultRoutingConfig() RoutingConfig {
 					"anthropic/claude-sonnet-4.6",
 					"google/gemini-3.1-pro",
 					"google/gemini-3-pro-preview",
-					"moonshot/kimi-k2.5",
+					"nvidia/kimi-k2.5",
 				},
 			},
 			TierReasoning: {
@@ -156,13 +156,13 @@ func DefaultRoutingConfig() RoutingConfig {
 			TierSimple: {
 				Primary: "openai/gpt-4o-mini",
 				Fallback: []string{
-					"moonshot/kimi-k2.5",
+					"nvidia/kimi-k2.5",
 					"anthropic/claude-haiku-4.5",
 					"xai/grok-4-1-fast-non-reasoning",
 				},
 			},
 			TierMedium: {
-				Primary: "moonshot/kimi-k2.5",
+				Primary: "nvidia/kimi-k2.5",
 				Fallback: []string{
 					"xai/grok-4-1-fast-non-reasoning",
 					"openai/gpt-4o-mini",
@@ -191,11 +191,11 @@ func DefaultRoutingConfig() RoutingConfig {
 
 		Promotions: []Promotion{
 			{
-				Name:      "GLM-5 Launch Promo ($0.001 flat)",
+				Name:      "GLM-5.1 Launch Promo ($0.001 flat)",
 				StartDate: "2026-04-01",
 				EndDate:   "2026-04-15",
 				TierOverrides: map[Tier]PartialTierConfig{
-					TierSimple: {Primary: "zai/glm-5"},
+					TierSimple: {Primary: "zai/glm-5.1"},
 				},
 				Profiles: []string{"auto"},
 			},
