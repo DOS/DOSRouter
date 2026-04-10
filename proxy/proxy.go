@@ -171,6 +171,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// Resolve model alias
 	resolvedModel := models.ResolveModelAlias(req.Model)
 	isSmartRoute := resolvedModel == "auto" || resolvedModel == "eco" || resolvedModel == "premium"
+	userExplicit := !isSmartRoute // User explicitly selected a model (not a routing profile)
 
 	var decision *router.RoutingDecision
 	if isSmartRoute {
@@ -180,6 +181,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				resolvedModel = entry.Model
 				isSmartRoute = false
 				w.Header().Set("X-DOSRouter-Session", "pinned")
+				// Preserve the explicit flag from the pinned session
+				userExplicit = entry.UserExplicit
 			}
 		}
 	}
@@ -229,10 +232,15 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Pin to session
+		// Pin to session (smart-routed, not user-explicit)
 		if sessionID != "" {
-			s.sessions.SetSession(sessionID, resolvedModel, d.Tier)
+			s.sessions.SetSession(sessionID, resolvedModel, d.Tier, false)
 		}
+	}
+
+	// Pin explicit model selection to session
+	if userExplicit && sessionID != "" && !isSmartRoute {
+		s.sessions.SetSession(sessionID, resolvedModel, "", true)
 	}
 
 	// --- Context compression (if enabled) ---
@@ -326,6 +334,54 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 	} else {
 		respBody, _ := io.ReadAll(resp.Body)
+
+		// --- Empty turn fallback detection ---
+		// If the response has empty content, no tool_calls, and finish_reason "stop",
+		// treat as degraded and try the next model in the fallback chain.
+		if resp.StatusCode == http.StatusOK && decision != nil && isEmptyTurn(respBody) {
+			fallbackChain := router.GetFallbackChain(decision.Tier, decision.TierConfigs)
+			nextModel := ""
+			for i, m := range fallbackChain {
+				if m == resolvedModel && i+1 < len(fallbackChain) {
+					nextModel = fallbackChain[i+1]
+					break
+				}
+			}
+			if nextModel != "" {
+				log.Printf("degraded response: empty turn from %s, falling back", resolvedModel)
+				resolvedModel = nextModel
+				req.Model = nextModel
+				newBody, _ = json.Marshal(req)
+
+				// Re-pin session to fallback model
+				if sessionID != "" {
+					s.sessions.SetSession(sessionID, nextModel, decision.Tier, userExplicit)
+				}
+
+				// Retry with fallback model
+				makeReq = func() (*http.Request, error) {
+					upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, bytes.NewReader(newBody))
+					if err != nil {
+						return nil, err
+					}
+					upstreamReq.Header.Set("Content-Type", "application/json")
+					if s.config.UpstreamAPIKey != "" {
+						upstreamReq.Header.Set("Authorization", "Bearer "+s.config.UpstreamAPIKey)
+					} else {
+						upstreamReq.Header.Set("Authorization", r.Header.Get("Authorization"))
+					}
+					return upstreamReq, nil
+				}
+				fbResp, fbErr := retry.Do(r.Context(), makeReq, retry.WithClient(s.httpClient))
+				if fbErr == nil {
+					defer fbResp.Body.Close()
+					respBody, _ = io.ReadAll(fbResp.Body)
+					resp = fbResp
+					w.Header().Set("X-DOSRouter-Fallback", nextModel)
+					w.Header().Set("X-DOSRouter-Model", nextModel)
+				}
+			}
+		}
 
 		// Cache the response
 		s.cache.Set(body, cache.Entry{
@@ -540,6 +596,27 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 		"scoring":  scoring,
 		"decision": decision,
 	})
+}
+
+// isEmptyTurn detects a degraded "empty turn" response: content is empty,
+// no tool_calls, and finish_reason is "stop".
+func isEmptyTurn(body []byte) bool {
+	var resp struct {
+		Choices []struct {
+			Message struct {
+				Content   string          `json:"content"`
+				ToolCalls json.RawMessage `json:"tool_calls"`
+			} `json:"message"`
+			FinishReason string `json:"finish_reason"`
+		} `json:"choices"`
+	}
+	if json.Unmarshal(body, &resp) != nil || len(resp.Choices) == 0 {
+		return false
+	}
+	c := resp.Choices[0]
+	return c.Message.Content == "" &&
+		(len(c.Message.ToolCalls) == 0 || string(c.Message.ToolCalls) == "null") &&
+		c.FinishReason == "stop"
 }
 
 // extractPrompts extracts the last user message as prompt and system message.

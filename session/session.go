@@ -47,6 +47,7 @@ type Entry struct {
 	RecentHashes      []string // sliding window of recent request hashes
 	Strikes           int
 	Escalated         bool
+	UserExplicit      bool     // true when user explicitly selected a model (not a routing profile)
 	SessionCostMicros int64    // cost in micro-USD (1 USD = 1_000_000 micros)
 }
 
@@ -103,7 +104,10 @@ func (s *Store) GetSession(sessionID string) *Entry {
 }
 
 // SetSession pins a model to a session. Creates or updates.
-func (s *Store) SetSession(sessionID, model string, tier router.Tier) {
+// If userExplicit is true, the user explicitly chose this model (not a routing
+// profile), and session pinning will skip tier escalation and profile-based
+// routing for the lifetime of the session.
+func (s *Store) SetSession(sessionID, model string, tier router.Tier, userExplicit bool) {
 	if !s.config.Enabled || sessionID == "" {
 		return
 	}
@@ -117,9 +121,14 @@ func (s *Store) SetSession(sessionID, model string, tier router.Tier) {
 			existing.Model = model
 			existing.Tier = tier
 		}
+		// UserExplicit is sticky: once set, only cleared on session expiry.
+		if userExplicit {
+			existing.UserExplicit = true
+		}
 	} else {
 		s.sessions[sessionID] = &Entry{
-			Model: model, Tier: tier, CreatedAt: now, LastUsedAt: now, RequestCount: 1,
+			Model: model, Tier: tier, CreatedAt: now, LastUsedAt: now,
+			RequestCount: 1, UserExplicit: userExplicit,
 		}
 	}
 }
@@ -201,6 +210,8 @@ func (s *Store) RecordRequestHash(sessionID, hash string) int {
 }
 
 // EscalateSession bumps the session tier one level up.
+// If the session has UserExplicit set, escalation is skipped entirely -
+// the user's explicit model choice wins unconditionally.
 func (s *Store) EscalateSession(sessionID string) {
 	if !s.config.Enabled || sessionID == "" {
 		return
@@ -209,6 +220,9 @@ func (s *Store) EscalateSession(sessionID string) {
 	defer s.mu.Unlock()
 	entry, ok := s.sessions[sessionID]
 	if !ok {
+		return
+	}
+	if entry.UserExplicit {
 		return
 	}
 	entry.Escalated = true
@@ -322,7 +336,7 @@ func timeMillis() int64 {
 
 // String returns a one-line summary of a session entry.
 func (e *Entry) String() string {
-	return fmt.Sprintf("model=%s tier=%s reqs=%d strikes=%d cost=$%.6f",
-		e.Model, e.Tier, e.RequestCount, e.Strikes,
+	return fmt.Sprintf("model=%s tier=%s reqs=%d strikes=%d explicit=%v cost=$%.6f",
+		e.Model, e.Tier, e.RequestCount, e.Strikes, e.UserExplicit,
 		float64(e.SessionCostMicros)/1_000_000.0)
 }
