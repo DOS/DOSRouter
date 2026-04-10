@@ -1,6 +1,22 @@
-# DOSRouter (Go)
+# DOSRouter
 
-Smart LLM router ported from [ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript) to Go.
+**High-performance LLM router written in Go.** Routes requests to the optimal model based on prompt complexity, cost targets, and capability requirements.
+
+Go port of [ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript) - rewritten for lower latency and easier deployment.
+
+> **Production-proven at [DOS.AI](https://dos.ai)** - powering the DOS.AI inference API that serves thousands of LLM requests daily with automatic model selection, cost optimization, and multi-provider failover.
+
+## Features
+
+- **15-dimension weighted scorer** - classifies prompts in ~0.04ms (40us) without any LLM call
+- **Tier-based routing** - SIMPLE / MEDIUM / COMPLEX / REASONING with configurable model pools
+- **Cost optimization** - automatic savings calculation vs baseline (opus-class) pricing
+- **Multi-provider failover** - primary + fallback providers per model
+- **Agentic detection** - identifies tool-calling patterns, routes to capable models
+- **Session pinning** - maintains model consistency within conversations
+- **Streaming proxy** - OpenAI-compatible SSE proxy with cost breakdown injection
+- **55+ models** - built-in catalog with pricing, capabilities, and aliases
+- **Zero dependencies** for core routing - only stdlib
 
 ## Architecture
 
@@ -19,6 +35,9 @@ models/          Model catalog
 
 proxy/           OpenAI-compatible proxy
   proxy.go       HTTP server with smart routing, SSE streaming, /debug endpoint
+
+session/         Session management
+  session.go     Conversation pinning with TTL and explicit user overrides
 
 cmd/dosrouter/   CLI
   main.go        serve, classify, models commands
@@ -48,7 +67,7 @@ cmd/dosrouter/   CLI
 
 **Confidence**: Sigmoid calibration `1/(1+exp(-12*distance))`, threshold 0.7
 
-## Usage
+## Quick Start
 
 ### CLI
 
@@ -64,7 +83,7 @@ go run ./cmd/dosrouter serve --port 8080 --upstream https://api.example.com --ap
 go run ./cmd/dosrouter models
 ```
 
-### As a library
+### As a Library
 
 ```go
 import (
@@ -93,7 +112,6 @@ fmt.Printf("Model: %s, Tier: %s, Savings: %.0f%%\n",
 ## Build & Test
 
 ```bash
-cd go/
 go build ./...
 go test ./router/ -v
 go test ./router/ -bench=. -benchmem
@@ -104,3 +122,13 @@ go test ./router/ -bench=. -benchmem
 - Classification: ~0.04ms per request (40us)
 - Zero external dependencies for routing
 - LLM fallback only for ambiguous cases (~20-30%)
+
+## Upstream Sync
+
+This is a Go port of [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter). Routing logic is synced periodically from upstream releases. Payment, plugin lifecycle, and CLI-specific features are excluded. See [UPSTREAM_SYNC.md](UPSTREAM_SYNC.md) for details.
+
+**Current sync**: v0.12.146
+
+## License
+
+MIT
