@@ -2,7 +2,7 @@
 
 **Upstream**: [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript)
 **This repo**: [DOS/DOSRouter](https://github.com/DOS/DOSRouter) (Go port)
-**Last synced**: v0.12.106 (initial port, 2026-04-07)
+**Last synced**: v0.12.146 (2026-04-11)
 
 ## Sync Workflow
 
@@ -28,25 +28,26 @@ DOSRouter ports **routing logic only**. These upstream areas are excluded:
 - Ported: Full 1:1 port of all routing modules
 - Scope: scorer, strategy, session, proxy, models, tiers, config
 
-### 2026-04-10 - Pending sync (v0.12.106 -> v0.12.145)
+### 2026-04-11 - Sync to v0.12.146
 
 | Release | Status | Summary | Notes |
 |---------|--------|---------|-------|
-| v0.12.145 | TODO | eco/premium null tier fallback | Fall back to default tiers when eco/premiumTiers is nil |
-| v0.12.144 | TODO | Session pinning `userExplicit` flag | User's /model choice wins over profile routing |
+| v0.12.146 | DONE | usage.cost breakdown in responses | Actual cost, baseline, savings injected into streaming + non-streaming |
+| v0.12.145 | DONE | eco/premium null tier fallback | Fall back to default tiers when eco/premiumTiers is nil |
+| v0.12.144 | DONE | Session pinning `userExplicit` flag | User's /model choice wins over profile routing |
 | v0.12.143 | SKIP | Prettier formatting | TS-only |
 | v0.12.142 | SKIP | Deferred proxy startup for plugin config | OpenClaw plugin lifecycle |
-| v0.12.141 | TODO | Agentic mode 3-state semantics | `nil`=auto, `true`=force, `false`=disable. Merge all tier sets |
+| v0.12.141 | DONE | Agentic mode 3-state semantics | `nil`=auto, `true`=force, `false`=disable |
 | v0.12.140 | SKIP | Solana doctor fix | Payment module |
-| v0.12.139 | SKIP | baseUrl overwrite fix + GLM allowlist | OpenClaw plugin lifecycle |
-| v0.12.92 | TODO | `normalizeMessagesForThinking` fix | Add reasoning_content to all assistant msgs for reasoning models |
-| v0.12.90 | TODO | Empty turn fallback detection | Detect empty content + no tool_calls as degraded response |
-| v0.12.69 | TODO | GPT-5.4 Nano + Gemini 3.1 Flash Lite | Model roster update |
-| v0.12.66 | TODO | Payment fail -> free model fallback | May adapt: treat as provider error for fallback |
+| v0.12.139 | DONE | Model roster: GLM-5.1 allowlist, nvidia/kimi | Ported model + alias changes |
+| v0.12.92 | DONE | `normalizeMessagesForThinking` | reasoning_content on all assistant msgs |
+| v0.12.90 | DONE | Empty turn fallback detection | Detect empty + no tool_calls as degraded |
+| v0.12.69 | DONE | GPT-5.4 Mini + model roster updates | New model + alias + tier config updates |
+| v0.12.66 | SKIP | Payment settlement fallback | Payment module (DOSRouter scope: no payment) |
 | v0.12.65 | SKIP | Pre-auth cache key fix | Payment module |
-| v0.12.64 | TODO | Review needed | Check changelog |
-| v0.12.56 | TODO | Review needed | Check changelog |
-| v0.12.30 | TODO | Review needed | Check changelog |
-| v0.12.25 | TODO | Review needed | Check changelog |
-| v0.12.24 | TODO | Review needed | Check changelog |
-| v0.12.10 | TODO | Review needed | Check changelog |
+| v0.12.64 | SKIP | Reviewed - plugin/payment only | No routing changes |
+| v0.12.56 | SKIP | Reviewed - plugin/payment only | No routing changes |
+| v0.12.30 | SKIP | Reviewed - plugin/payment only | No routing changes |
+| v0.12.25 | SKIP | Reviewed - plugin/payment only | No routing changes |
+| v0.12.24 | SKIP | Reviewed - plugin/payment only | No routing changes |
+| v0.12.10 | SKIP | /stats clear command | CLI-only, not applicable to Go proxy |
