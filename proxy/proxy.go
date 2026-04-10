@@ -109,8 +109,9 @@ type chatRequest struct {
 }
 
 type chatMessage struct {
-	Role    string          `json:"role"`
-	Content json.RawMessage `json:"content"`
+	Role             string          `json:"role"`
+	Content          json.RawMessage `json:"content"`
+	ReasoningContent *string         `json:"reasoning_content,omitempty"`
 }
 
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -269,6 +270,12 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// Rewrite model in request body
 	req.Model = resolvedModel
+
+	// Normalize assistant messages for reasoning models (upstream v0.12.92)
+	if models.IsReasoningModel(resolvedModel) {
+		req.Messages = normalizeMessagesForThinking(req.Messages)
+	}
+
 	newBody, err := json.Marshal(req)
 	if err != nil {
 		http.Error(w, "Failed to marshal request", http.StatusInternalServerError)
@@ -617,6 +624,31 @@ func isEmptyTurn(body []byte) bool {
 	return c.Message.Content == "" &&
 		(len(c.Message.ToolCalls) == 0 || string(c.Message.ToolCalls) == "null") &&
 		c.FinishReason == "stop"
+}
+
+// normalizeMessagesForThinking adds reasoning_content: "" to all assistant
+// messages that lack it, which reasoning models require on every turn.
+// See upstream v0.12.92 fix for multi-turn chat with reasoning models.
+func normalizeMessagesForThinking(messages []chatMessage) []chatMessage {
+	hasChanges := false
+	for _, m := range messages {
+		if m.Role == "assistant" && m.ReasoningContent == nil {
+			hasChanges = true
+			break
+		}
+	}
+	if !hasChanges {
+		return messages
+	}
+	empty := ""
+	out := make([]chatMessage, len(messages))
+	for i, m := range messages {
+		if m.Role == "assistant" && m.ReasoningContent == nil {
+			m.ReasoningContent = &empty
+		}
+		out[i] = m
+	}
+	return out
 }
 
 // extractPrompts extracts the last user message as prompt and system message.
