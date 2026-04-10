@@ -334,8 +334,47 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
+		var streamInputTok, streamOutputTok int
 		for scanner.Scan() {
 			line := scanner.Text()
+			// Parse usage from streaming chunks (some providers send usage in final chunk)
+			if strings.HasPrefix(line, "data: ") && line != "data: [DONE]" {
+				var chunk struct {
+					Usage *struct {
+						PromptTokens     int `json:"prompt_tokens"`
+						CompletionTokens int `json:"completion_tokens"`
+					} `json:"usage"`
+				}
+				if json.Unmarshal([]byte(line[6:]), &chunk) == nil && chunk.Usage != nil {
+					streamInputTok = chunk.Usage.PromptTokens
+					streamOutputTok = chunk.Usage.CompletionTokens
+				}
+			}
+			// Intercept [DONE] to inject cost usage chunk
+			if line == "data: [DONE]" {
+				if decision != nil && (streamInputTok > 0 || streamOutputTok > 0) {
+					cb := buildCostBreakdown(resolvedModel, string(decision.Tier), decision.Profile, s.modelPricing, streamInputTok, streamOutputTok)
+					if cb != nil {
+						usageChunk := map[string]interface{}{
+							"id":      fmt.Sprintf("chatcmpl-%d", time.Now().UnixMilli()),
+							"object":  "chat.completion.chunk",
+							"created": time.Now().Unix(),
+							"model":   resolvedModel,
+							"choices": []interface{}{},
+							"usage": map[string]interface{}{
+								"prompt_tokens":     streamInputTok,
+								"completion_tokens": streamOutputTok,
+								"total_tokens":      streamInputTok + streamOutputTok,
+								"cost":              cb,
+							},
+						}
+						if b, err := json.Marshal(usageChunk); err == nil {
+							fmt.Fprintf(w, "data: %s\n\n", b)
+							flusher.Flush()
+						}
+					}
+				}
+			}
 			fmt.Fprintf(w, "%s\n", line)
 			flusher.Flush()
 		}
@@ -397,12 +436,34 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			Header:     resp.Header,
 		})
 
+		// Inject usage.cost into non-streaming response (upstream v0.12.146)
+		if resp.StatusCode == http.StatusOK && decision != nil {
+			var parsed map[string]interface{}
+			if json.Unmarshal(respBody, &parsed) == nil {
+				// Overwrite model with actual resolved model
+				parsed["model"] = resolvedModel
+				// Inject cost breakdown if usage tokens available
+				if usage, ok := parsed["usage"].(map[string]interface{}); ok {
+					inputTok, _ := usage["prompt_tokens"].(float64)
+					outputTok, _ := usage["completion_tokens"].(float64)
+					cb := buildCostBreakdown(resolvedModel, string(decision.Tier), decision.Profile, s.modelPricing, int(inputTok), int(outputTok))
+					if cb != nil {
+						usage["cost"] = cb
+					}
+				}
+				if b, err := json.Marshal(parsed); err == nil {
+					respBody = b
+				}
+			}
+		}
+
 		// Copy headers
 		for k, v := range resp.Header {
 			for _, vv := range v {
 				w.Header().Add(k, vv)
 			}
 		}
+		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respBody)))
 		w.WriteHeader(resp.StatusCode)
 		w.Write(respBody)
 
@@ -624,6 +685,53 @@ func isEmptyTurn(body []byte) bool {
 	return c.Message.Content == "" &&
 		(len(c.Message.ToolCalls) == 0 || string(c.Message.ToolCalls) == "null") &&
 		c.FinishReason == "stop"
+}
+
+// CostBreakdown is the usage.cost payload injected into every routed response.
+type CostBreakdown struct {
+	Total      float64 `json:"total"`
+	Input      float64 `json:"input"`
+	Output     float64 `json:"output"`
+	Baseline   float64 `json:"baseline"`
+	SavingsPct *int    `json:"savings_pct,omitempty"`
+	Model      string  `json:"model"`
+	Tier       string  `json:"tier,omitempty"`
+}
+
+// buildCostBreakdown computes actual cost from upstream token counts and model pricing.
+// Returns nil if token counts are unavailable.
+func buildCostBreakdown(model string, tier string, profile string, pricing map[string]router.ModelPricing, inputTokens, outputTokens int) *CostBreakdown {
+	if inputTokens <= 0 && outputTokens <= 0 {
+		return nil
+	}
+	p, ok := pricing[model]
+	if !ok {
+		return nil
+	}
+	input := float64(inputTokens) / 1_000_000 * p.InputPrice
+	output := float64(outputTokens) / 1_000_000 * p.OutputPrice
+	total := input + output
+
+	// Baseline: what claude-opus-4.6 would have cost (reference for savings)
+	baselinePrice, hasBaseline := pricing["anthropic/claude-opus-4.6"]
+	baseline := 0.0
+	if hasBaseline {
+		baseline = float64(inputTokens)/1_000_000*baselinePrice.InputPrice + float64(outputTokens)/1_000_000*baselinePrice.OutputPrice
+	}
+
+	cb := &CostBreakdown{
+		Total:    math.Round(total*1_000_000) / 1_000_000,
+		Input:    math.Round(input*1_000_000) / 1_000_000,
+		Output:   math.Round(output*1_000_000) / 1_000_000,
+		Baseline: math.Round(baseline*1_000_000) / 1_000_000,
+		Model:    model,
+		Tier:     tier,
+	}
+	if profile != "premium" && baseline > 0 {
+		pct := int(math.Round(math.Max(0, math.Min(100, (1-total/baseline)*100))))
+		cb.SavingsPct = &pct
+	}
+	return cb
 }
 
 // normalizeMessagesForThinking adds reasoning_content: "" to all assistant
