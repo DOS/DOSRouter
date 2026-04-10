@@ -205,7 +205,7 @@ func DefaultRoutingConfig() RoutingConfig {
 			MaxTokensForceComplex:   100_000,
 			StructuredOutputMinTier: TierMedium,
 			AmbiguousDefaultTier:    TierMedium,
-			AgenticMode:             false,
+			AgenticMode:             nil, // nil = auto-detect via tools + agenticScore
 		},
 	}
 }

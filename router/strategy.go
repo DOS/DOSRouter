@@ -2,6 +2,7 @@ package router
 
 import (
 	"fmt"
+	"log"
 	"math"
 	"regexp"
 	"strings"
@@ -97,25 +98,54 @@ func (s *RulesStrategy) Route(prompt string, systemPrompt string, maxOutputToken
 	var profileSuffix string
 	var profile string
 
-	if routingProfile == "eco" && len(config.EcoTiers) > 0 {
-		tierConfigs = config.EcoTiers
-		profileSuffix = " | eco"
-		profile = "eco"
-	} else if routingProfile == "premium" && len(config.PremiumTiers) > 0 {
-		tierConfigs = config.PremiumTiers
-		profileSuffix = " | premium"
-		profile = "premium"
+	if routingProfile == "eco" {
+		if len(config.EcoTiers) > 0 {
+			tierConfigs = config.EcoTiers
+			profileSuffix = " | eco"
+			profile = "eco"
+		} else {
+			log.Printf("[router] eco profile requested but ecoTiers is nil, using default tiers")
+			tierConfigs = config.Tiers
+			profileSuffix = " | eco (fallback to default)"
+			profile = "eco"
+		}
+	} else if routingProfile == "premium" {
+		if len(config.PremiumTiers) > 0 {
+			tierConfigs = config.PremiumTiers
+			profileSuffix = " | premium"
+			profile = "premium"
+		} else {
+			log.Printf("[router] premium profile requested but premiumTiers is nil, using default tiers")
+			tierConfigs = config.Tiers
+			profileSuffix = " | premium (fallback to default)"
+			profile = "premium"
+		}
 	} else {
 		// Auto profile: intelligent routing with agentic detection
-		agenticScore := ruleResult.AgenticScore
-		isAutoAgentic := agenticScore >= 0.5
-		isExplicitAgentic := config.Overrides.AgenticMode
-		hasToolsInRequest := options.HasTools
-		useAgenticTiers := (hasToolsInRequest || isAutoAgentic || isExplicitAgentic) && len(config.AgenticTiers) > 0
+		// AgenticMode 3-state semantics:
+		//   nil   -> auto-detect via tools + agenticScore >= 0.5
+		//   true  -> force agentic tiers unconditionally
+		//   false -> disable agentic tiers entirely
+		agenticMode := config.Overrides.AgenticMode
+		var useAgenticTiers bool
+
+		if agenticMode != nil && *agenticMode {
+			// Explicitly forced on
+			useAgenticTiers = len(config.AgenticTiers) > 0
+		} else if agenticMode != nil && !*agenticMode {
+			// Explicitly forced off
+			useAgenticTiers = false
+		} else {
+			// nil -> auto-detect
+			agenticScore := ruleResult.AgenticScore
+			isAutoAgentic := agenticScore >= 0.5
+			hasToolsInRequest := options.HasTools
+			useAgenticTiers = (hasToolsInRequest || isAutoAgentic) && len(config.AgenticTiers) > 0
+		}
 
 		if useAgenticTiers {
 			tierConfigs = config.AgenticTiers
-			if hasToolsInRequest {
+			if options.HasTools {
 				profileSuffix = " | agentic (tools)"
 			} else {
 				profileSuffix = " | agentic"

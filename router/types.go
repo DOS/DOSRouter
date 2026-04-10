@@ -143,7 +143,7 @@ type OverridesConfig struct {
 	MaxTokensForceComplex   int  `json:"maxTokensForceComplex"`
 	StructuredOutputMinTier Tier `json:"structuredOutputMinTier"`
 	AmbiguousDefaultTier    Tier `json:"ambiguousDefaultTier"`
-	AgenticMode             bool `json:"agenticMode,omitempty"`
+	AgenticMode             *bool `json:"agenticMode,omitempty"`
 }
 
 // Promotion is a time-windowed tier override.
