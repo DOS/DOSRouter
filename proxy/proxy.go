@@ -13,6 +13,7 @@ import (
 	"math"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/DOS/DOSRouter/cache"
@@ -55,6 +56,13 @@ type Server struct {
 	sessions     *session.Store
 	journal      *journal.SessionJournal
 	spendControl *spendcontrol.SpendControl
+
+	// Deferred startup for OpenClaw plugin config (upstream v0.12.142)
+	// When OpenClaw calls Register() twice, the first call has empty pluginConfig.
+	// We defer proxy startup by 250ms to allow the second call with real config.
+	startMu      sync.Mutex
+	deferTimer   *time.Timer
+	registered   bool
 }
 
 // New creates a new proxy server.
@@ -81,7 +89,57 @@ func New(cfg Config) *Server {
 
 // Close shuts down the proxy server and its components.
 func (s *Server) Close() {
+	s.startMu.Lock()
+	if s.deferTimer != nil {
+		s.deferTimer.Stop()
+	}
+	s.startMu.Unlock()
 	s.sessions.Close()
+}
+
+// Register handles OpenClaw plugin registration (upstream v0.12.142).
+// OpenClaw calls Register() twice: first with empty config (pre-gateway),
+// then with the user's actual pluginConfig from openclaw.json.
+// If pluginConfig is empty, we defer startup by 250ms to wait for the real config.
+func (s *Server) Register(pluginConfig *router.RoutingConfig) {
+	s.startMu.Lock()
+	defer s.startMu.Unlock()
+
+	if pluginConfig != nil {
+		// Got real config — cancel any deferred timer and apply
+		if s.deferTimer != nil {
+			s.deferTimer.Stop()
+			s.deferTimer = nil
+		}
+		s.routingConfig = *pluginConfig
+		s.registered = true
+		log.Println("DOSRouter: registered with plugin config")
+		return
+	}
+
+	if s.registered {
+		return // Already registered, ignore empty re-register
+	}
+
+	// Empty pluginConfig — defer startup by 250ms
+	// If a second Register() call arrives with real config, it cancels this timer
+	if s.deferTimer == nil {
+		s.deferTimer = time.AfterFunc(250*time.Millisecond, func() {
+			s.startMu.Lock()
+			defer s.startMu.Unlock()
+			if !s.registered {
+				s.registered = true
+				log.Println("DOSRouter: registered with default config (no plugin config received)")
+			}
+		})
+	}
+}
+
+// IsRegistered returns true if the server has been registered (with or without plugin config).
+func (s *Server) IsRegistered() bool {
+	s.startMu.Lock()
+	defer s.startMu.Unlock()
+	return s.registered
 }
 
 // ListenAndServe starts the proxy server.

@@ -56,11 +56,24 @@ var chains = map[string]ChainConfig{
 		TokenSymbol:  "USDC",
 		Explorer:     "https://snowtrace.io",
 	},
+	"solana": {
+		Name:         "Solana",
+		RPCURL:       "https://api.mainnet-beta.solana.com",
+		ChainID:      0, // Not EVM
+		TokenAddress: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v", // USDC SPL Token mint
+		TokenSymbol:  "USDC",
+		Explorer:     "https://solscan.io",
+	},
 }
 
 // SupportedChains returns the list of supported chain names.
 func SupportedChains() []string {
-	return []string{"doschain", "base", "avalanche"}
+	return []string{"doschain", "base", "avalanche", "solana"}
+}
+
+// IsEVMChain returns true if the given chain is EVM-compatible.
+func IsEVMChain(chain string) bool {
+	return chain != "solana"
 }
 
 // Wallet represents an EVM wallet with key material and chain config.
@@ -183,6 +196,11 @@ func (w *Wallet) GetBalance() (float64, error) {
 	rpcURL := os.Getenv("DOSROUTER_RPC_URL")
 	if rpcURL == "" {
 		rpcURL = cc.RPCURL
+	}
+
+	// Solana uses different RPC methods (upstream v0.12.140)
+	if w.chain == "solana" {
+		return querySolanaBalance(rpcURL, w.address, cc.TokenAddress)
 	}
 
 	if cc.TokenAddress == "" {
@@ -333,6 +351,53 @@ func queryERC20Balance(rpcURL, address, tokenAddress string) (float64, error) {
 		return 0, err
 	}
 	return hexToFloat64(result, 6), nil // USDC has 6 decimals
+}
+
+// querySolanaBalance queries SPL Token balance via Solana JSON-RPC.
+func querySolanaBalance(rpcURL, address, tokenMint string) (float64, error) {
+	// getTokenAccountsByOwner to find USDC token accounts
+	payload := fmt.Sprintf(`{"jsonrpc":"2.0","method":"getTokenAccountsByOwner","params":["%s",{"mint":"%s"},{"encoding":"jsonParsed"}],"id":1}`, address, tokenMint)
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Post(rpcURL, "application/json", strings.NewReader(payload))
+	if err != nil {
+		return 0, fmt.Errorf("Solana RPC call failed: %w", err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return 0, fmt.Errorf("reading Solana RPC response: %w", err)
+	}
+
+	var rpcResp struct {
+		Result struct {
+			Value []struct {
+				Account struct {
+					Data struct {
+						Parsed struct {
+							Info struct {
+								TokenAmount struct {
+									UIAmount float64 `json:"uiAmount"`
+								} `json:"tokenAmount"`
+							} `json:"info"`
+						} `json:"parsed"`
+					} `json:"data"`
+				} `json:"account"`
+			} `json:"value"`
+		} `json:"result"`
+		Error *struct {
+			Message string `json:"message"`
+		} `json:"error"`
+	}
+	if err := json.Unmarshal(body, &rpcResp); err != nil {
+		return 0, fmt.Errorf("parsing Solana RPC response: %w", err)
+	}
+	if rpcResp.Error != nil {
+		return 0, fmt.Errorf("Solana RPC error: %s", rpcResp.Error.Message)
+	}
+	if len(rpcResp.Result.Value) == 0 {
+		return 0, nil // No token account = zero balance
+	}
+	return rpcResp.Result.Value[0].Account.Data.Parsed.Info.TokenAmount.UIAmount, nil
 }
 
 // rpcCall sends a JSON-RPC request and returns the result string.

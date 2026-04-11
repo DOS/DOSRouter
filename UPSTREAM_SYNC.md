@@ -42,9 +42,9 @@ These upstream areas are excluded (TS/npm-specific):
 | v0.12.145 | DONE | eco/premium null tier fallback | Fall back to default tiers when eco/premiumTiers is nil |
 | v0.12.144 | DONE | Session pinning `userExplicit` flag | User's /model choice wins over profile routing |
 | v0.12.143 | SKIP | Prettier formatting | TS-only |
-| v0.12.142 | SKIP | Deferred proxy startup for plugin config | OpenClaw plugin lifecycle |
+| v0.12.142 | DONE | Deferred proxy startup for plugin config | Register() method with 250ms defer timer |
 | v0.12.141 | DONE | Agentic mode 3-state semantics | `nil`=auto, `true`=force, `false`=disable |
-| v0.12.140 | SKIP | Solana doctor fix | Solana-only, DOSRouter is EVM-only |
+| v0.12.140 | DONE | Solana doctor fix | Added Solana chain + SPL Token balance query |
 | v0.12.139 | DONE | Model roster: GLM-5.1 allowlist, nvidia/kimi | Ported model + alias changes |
 | v0.12.92 | DONE | `normalizeMessagesForThinking` | reasoning_content on all assistant msgs |
 | v0.12.90 | DONE | Empty turn fallback detection | Detect empty + no tool_calls as degraded |
@@ -55,7 +55,7 @@ These upstream areas are excluded (TS/npm-specific):
 | v0.12.56 | DONE | GLM-5 model picker | Included in model roster updates |
 | v0.12.30 | SKIP | Empty release | No changes |
 | v0.12.25 | DONE | Docs refresh | Architecture, configuration, troubleshooting updated |
-| v0.12.24 | SKIP | Preserve user allowlist on restart | OpenClaw plugin-specific |
+| v0.12.24 | DONE | Preserve user allowlist on restart | InjectModelsConfig() merges user entries |
 | v0.12.10 | DONE | /stats clear command | Ported as `dosrouter stats clear` CLI command |
 
 ### 2026-04-11 - Full port expansion
