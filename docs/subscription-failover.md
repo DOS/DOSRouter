@@ -144,7 +144,7 @@ dosrouter models fallbacks add dos/nvidia/gpt-oss-120b      # Free tier
 
 #### Per-Agent Configuration
 
-Edit `~/.dosrouter/dosrouter.json`:
+Edit `~/.openclaw/DOS/dosrouter.json`:
 
 ```json
 {

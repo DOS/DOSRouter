@@ -64,5 +64,5 @@ These upstream areas are excluded (TS/npm-specific):
 - Added: image generation endpoint (`/v1/images/generations`)
 - Added: CLI commands (cache, report, wallet, chain, doctor, stats clear)
 - Updated: all docs rebranded from ClawRouter/BlockRun to DOSRouter
-- Updated: config paths from `~/.openclaw/blockrun/` to `~/.dosrouter/`
+- Updated: config paths from `~/.openclaw/blockrun/` to `~/.openclaw/DOS/`
 - Updated: model prefix from `blockrun/` to `dosrouter/`

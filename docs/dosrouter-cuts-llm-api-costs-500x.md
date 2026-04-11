@@ -178,7 +178,7 @@ curl -fsSL https://dos.ai/DOSRouter-update | bash
 dosrouter gateway restart
 ```
 
-DOSRouter auto-injects itself into `~/.dosrouter/dosrouter.json` as a provider on startup. No manual config needed — your existing tools, sessions, and extensions are unchanged.
+DOSRouter auto-injects itself into `~/.openclaw/DOS/dosrouter.json` as a provider on startup. No manual config needed — your existing tools, sessions, and extensions are unchanged.
 
 Load a wallet, choose a model profile (`eco` / `auto` / `premium` / `agentic`), and run.
 

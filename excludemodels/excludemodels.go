@@ -1,5 +1,5 @@
 // Package excludemodels manages a user-configurable list of excluded models
-// persisted at ~/.dosrouter/exclude-models.json.
+// persisted at ~/.openclaw/DOS/exclude-models.json.
 package excludemodels
 
 import (
@@ -18,7 +18,7 @@ var (
 
 func init() {
 	home, _ := os.UserHomeDir()
-	filePath = filepath.Join(home, ".dosrouter", "exclude-models.json")
+	filePath = filepath.Join(home, ".openclaw", "DOS", "exclude-models.json")
 }
 
 // SetFilePath overrides the default exclusion list path (useful for testing).

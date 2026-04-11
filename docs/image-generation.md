@@ -373,7 +373,7 @@ When using DOSRouter with DOSRouter, generate and edit images directly from any 
 
 ## Notes
 
-- **Local image caching** — All images (generated and edited) are cached locally at `~/.dosrouter/dos/images/` and served via `http://localhost:8402/images/`. Both base64 data URIs and HTTP URLs from upstream are downloaded and replaced with localhost URLs.
+- **Local image caching** — All images (generated and edited) are cached locally at `~/.openclaw/DOS/dos/images/` and served via `http://localhost:8402/images/`. Both base64 data URIs and HTTP URLs from upstream are downloaded and replaced with localhost URLs.
 - **Payment** — Each image costs the listed price in USDC, deducted from your wallet via x402. Make sure your wallet is funded before generating or editing.
 - **No DALL-E content policy bypass** — DALL-E 3 and GPT Image 1 still apply OpenAI's content policy. Use `flux` or `nano-banana` for more flexibility with generation.
 - **Size limits** — Requesting a size larger than the model's max will return an error. Check the table above before setting `--size`.

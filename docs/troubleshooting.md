@@ -19,7 +19,7 @@ Quick solutions for common DOSRouter issues.
 
 ```bash
 # 1. Check your version (should be 0.12+)
-cat ~/.dosrouter/extensions/dosrouter/package.json | grep version
+cat ~/.openclaw/DOS/extensions/dosrouter/package.json | grep version
 
 # 2. Check proxy is running
 curl http://localhost:8402/health

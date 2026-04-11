@@ -81,7 +81,7 @@ type walletFile struct {
 
 func walletDir() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".dosrouter")
+	return filepath.Join(home, ".openclaw", "DOS")
 }
 
 func walletPath() string {

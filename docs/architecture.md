@@ -222,7 +222,7 @@ Client                    Upstream API
 ### Wallet Management
 
 ```bash
-# Auto-generated on first run, saved to ~/.dosrouter/wallet.json
+# Auto-generated on first run, saved to ~/.openclaw/DOS/wallet.json
 dosrouter wallet
 
 # Recover from mnemonic

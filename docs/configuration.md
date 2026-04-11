@@ -36,7 +36,7 @@ export DOSROUTER_WALLET_KEY=0x...your_private_key...
 
 **Resolution order:**
 
-1. Saved file (`~/.dosrouter/wallet.json`) - checked first
+1. Saved file (`~/.openclaw/DOS/wallet.json`) - checked first
 2. `DOSROUTER_WALLET_KEY` environment variable
 3. Auto-generate - creates new wallet and saves to file
 
@@ -66,19 +66,19 @@ dosrouter chain base        # Base (EVM L2)
 dosrouter chain avalanche   # Avalanche C-Chain
 ```
 
-The selected chain is persisted in `~/.dosrouter/wallet.json`.
+The selected chain is persisted in `~/.openclaw/DOS/wallet.json`.
 
 ### Backup & Recovery
 
 ```bash
 # View mnemonic (shown on first wallet creation)
-cat ~/.dosrouter/wallet.json
+cat ~/.openclaw/DOS/wallet.json
 
 # Recover from mnemonic
 dosrouter wallet recover
 
 # Switch wallet via env var
-rm ~/.dosrouter/wallet.json
+rm ~/.openclaw/DOS/wallet.json
 export DOSROUTER_WALLET_KEY=0x...
 dosrouter wallet
 ```
@@ -142,7 +142,7 @@ DOSRouter includes built-in spending limits:
 - **Daily** - Rolling 24-hour spending cap
 - **Session** - Cumulative session total
 
-Configuration is stored in `~/.dosrouter/spending.json`.
+Configuration is stored in `~/.openclaw/DOS/spending.json`.
 
 ---
 

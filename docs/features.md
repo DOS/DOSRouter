@@ -254,4 +254,4 @@ Output:
 +============================================================+
 ```
 
-Stats are stored locally at `~/.dosrouter/dos/logs/` and aggregated on demand.
+Stats are stored locally at `~/.openclaw/DOS/dos/logs/` and aggregated on demand.

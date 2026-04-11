@@ -151,7 +151,7 @@ x-dosrouter-model: google/gemini-2.5-flash
 
 **Budget guard.** `maxCostPerRun` caps per-session spending. Two modes: `graceful` (downgrade to cheaper models) or `strict` (hard stop). The $248/day heartbeat scenario is structurally impossible.
 
-**Usage logging.** Every request logs to `~/.dosrouter/dos/logs/usage-YYYY-MM-DD.jsonl` with model, tier, cost, baseline cost, savings, and latency. `/stats` shows the breakdown.
+**Usage logging.** Every request logs to `~/.openclaw/DOS/dos/logs/usage-YYYY-MM-DD.jsonl` with model, tier, cost, baseline cost, savings, and latency. `/stats` shows the breakdown.
 
 ![Absolute Cost Visibility & Session Guardrails — No prepaid balances to drain. Every response includes explicit cost headers. JSONL usage logs track every request. maxCostPerRun caps per-session spending. When your wallet empties, you downgrade to the free tier instead of crashing.](./assets/dosrouter-cost-visibility-session-guardrails.png)
 
@@ -293,11 +293,11 @@ dosrouter
 # /stats
 ```
 
-DOSRouter auto-injects itself into `~/.dosrouter/dosrouter.json` as a provider on startup. Your existing tools, sessions, and extensions are unchanged.
+DOSRouter auto-injects itself into `~/.openclaw/DOS/dosrouter.json` as a provider on startup. Your existing tools, sessions, and extensions are unchanged.
 
 Load a wallet with USDC on Base or Solana, pick a routing profile, and run.
 
-![Frictionless Integration — npm install -g @dos/dosrouter, auto-injected provider into ~/.dosrouter/dosrouter.json. No code rewrites. Your existing tools, sessions, and extensions remain entirely unchanged.](./assets/dosrouter-frictionless-integration.png)
+![Frictionless Integration — npm install -g @dos/dosrouter, auto-injected provider into ~/.openclaw/DOS/dosrouter.json. No code rewrites. Your existing tools, sessions, and extensions remain entirely unchanged.](./assets/dosrouter-frictionless-integration.png)
 
 ---
 

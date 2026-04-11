@@ -4,7 +4,7 @@
 
 **Goal:** Let users exclude specific models from routing via `/exclude` Telegram command, persisted to disk.
 
-**Architecture:** New `exclude-models.json` file at `~/.dosrouter/dos/` stores the exclusion list. A `filterByExcludeList()` function in `selector.ts` filters the fallback chain (same safety pattern as existing filters). The `/exclude` command manages the list via add/remove/clear subcommands. The proxy loads the list at startup and re-reads on each request (hot-reload).
+**Architecture:** New `exclude-models.json` file at `~/.openclaw/DOS/dos/` stores the exclusion list. A `filterByExcludeList()` function in `selector.ts` filters the fallback chain (same safety pattern as existing filters). The `/exclude` command manages the list via add/remove/clear subcommands. The proxy loads the list at startup and re-reads on each request (hot-reload).
 
 **Tech Stack:** TypeScript, Node.js fs, existing DOSRouter command pattern
 
@@ -100,7 +100,7 @@ Expected: FAIL — module `./exclude-models.js` does not exist
 /**
  * Exclude Models — persistent user-configurable model exclusion list.
  *
- * Stores excluded model IDs in ~/.dosrouter/dos/exclude-models.json.
+ * Stores excluded model IDs in ~/.openclaw/DOS/dos/exclude-models.json.
  * Models in this list are filtered out of routing fallback chains.
  */
 
@@ -259,7 +259,7 @@ In `src/proxy.ts` at line ~1174, add to `ProxyOptions`:
   /**
    * Set of model IDs to exclude from routing.
    * Excluded models are filtered out of fallback chains.
-   * Loaded from ~/.dosrouter/dos/exclude-models.json
+   * Loaded from ~/.openclaw/DOS/dos/exclude-models.json
    */
   excludeModels?: Set<string>;
 ```
