@@ -1,12 +1,12 @@
-# ClawRouter E2E Testing, Docker Validation & Deployment
+# DOSRouter E2E Testing, Docker Validation & Deployment
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Comprehensive E2E test coverage, Docker install/uninstall validation (10 cases), and automated deployment pipeline for ClawRouter.
+**Goal:** Comprehensive E2E test coverage, Docker install/uninstall validation (10 cases), and automated deployment pipeline for DOSRouter.
 
-**Architecture:** Three-phase approach: (1) Expand E2E tests to cover error scenarios, edge cases, and the recent fixes (504 timeout, settlement retry, large payload handling), (2) Build Docker-based installation testing covering npm global, OpenClaw plugin, upgrade/downgrade, and cleanup scenarios, (3) Automate deployment with pre-publish validation and version management.
+**Architecture:** Three-phase approach: (1) Expand E2E tests to cover error scenarios, edge cases, and the recent fixes (504 timeout, settlement retry, large payload handling), (2) Build Docker-based installation testing covering npm global, DOSRouter plugin, upgrade/downgrade, and cleanup scenarios, (3) Automate deployment with pre-publish validation and version management.
 
-**Tech Stack:** TypeScript, tsx test runner, Docker, npm, OpenClaw CLI, bash scripting
+**Tech Stack:** TypeScript, tsx test runner, Docker, npm, DOSRouter CLI, bash scripting
 
 ---
 
@@ -320,21 +320,21 @@ allPassed =
 Run:
 
 ```bash
-BLOCKRUN_WALLET_KEY=0x... npx tsx test/test-e2e.ts
+DOSROUTER_WALLET_KEY=0x... npx tsx test/test-e2e.ts
 ```
 
 Expected output:
 
 ```
-=== ClawRouter e2e tests ===
+=== DOSRouter e2e tests ===
 
 Starting proxy...
 Proxy ready on port 8405
   Health check ... (wallet: 0xABC...) PASS
   Non-streaming request (deepseek/deepseek-chat) ... (response: "4") PASS
   Streaming request (google/gemini-2.5-flash) ... (heartbeat=true, done=true, content="Hello") PASS
-  Smart routing: simple query (blockrun/auto → should pick cheap model) ... PASS
-  Smart routing: streaming (blockrun/auto, stream=true) ... PASS
+  Smart routing: simple query (dos/auto → should pick cheap model) ... PASS
+  Smart routing: streaming (dos/auto, stream=true) ... PASS
   Dedup: identical request returns cached response ... PASS
   404 for unknown path ... PASS
   413 error for oversized request (>150KB) ... (payload=160KB, status=413) PASS
@@ -375,7 +375,7 @@ large payload truncation."
 
 ## Task 2: Docker Install/Uninstall Tests (10 Cases)
 
-**Goal:** Validate ClawRouter installation, upgrade, uninstall across different methods and environments.
+**Goal:** Validate DOSRouter installation, upgrade, uninstall across different methods and environments.
 
 **Files:**
 
@@ -448,34 +448,34 @@ test_case() {
 
 # Test 1: Fresh npm global installation
 test_fresh_install() {
-  echo "Installing @blockrun/clawrouter globally..."
-  npm install -g @blockrun/clawrouter@latest
+  echo "Installing @dos/dosrouter globally..."
+  npm install -g @dos/dosrouter@latest
 
-  echo "Verifying clawrouter command exists..."
-  which clawrouter || return 1
+  echo "Verifying dosrouter command exists..."
+  which dosrouter || return 1
 
   echo "Checking version..."
-  clawrouter --version || return 1
+  dosrouter --version || return 1
 
   echo "Verifying package is in npm global list..."
-  npm list -g @blockrun/clawrouter || return 1
+  npm list -g @dos/dosrouter || return 1
 
   return 0
 }
 
 # Test 2: Uninstall verification
 test_uninstall() {
-  echo "Uninstalling @blockrun/clawrouter..."
-  npm uninstall -g @blockrun/clawrouter
+  echo "Uninstalling @dos/dosrouter..."
+  npm uninstall -g @dos/dosrouter
 
-  echo "Verifying clawrouter command is gone..."
-  if which clawrouter 2>/dev/null; then
-    echo "ERROR: clawrouter command still exists after uninstall"
+  echo "Verifying dosrouter command is gone..."
+  if which dosrouter 2>/dev/null; then
+    echo "ERROR: dosrouter command still exists after uninstall"
     return 1
   fi
 
   echo "Verifying package is not in npm global list..."
-  if npm list -g @blockrun/clawrouter 2>/dev/null; then
+  if npm list -g @dos/dosrouter 2>/dev/null; then
     echo "ERROR: package still in npm list after uninstall"
     return 1
   fi
@@ -485,44 +485,44 @@ test_uninstall() {
 
 # Test 3: Reinstall after uninstall
 test_reinstall() {
-  echo "Reinstalling @blockrun/clawrouter..."
-  npm install -g @blockrun/clawrouter@latest
+  echo "Reinstalling @dos/dosrouter..."
+  npm install -g @dos/dosrouter@latest
 
   echo "Verifying reinstall works..."
-  clawrouter --version || return 1
+  dosrouter --version || return 1
 
   return 0
 }
 
-# Test 4: Installation as OpenClaw plugin (if OpenClaw available)
-test_openclaw_plugin_install() {
-  echo "Installing OpenClaw..."
-  npm install -g openclaw@latest || {
-    echo "OpenClaw not available, skipping test"
+# Test 4: Installation as DOSRouter plugin (if DOSRouter available)
+test_dosrouter_plugin_install() {
+  echo "Installing DOSRouter..."
+  npm install -g dosrouter@latest || {
+    echo "DOSRouter not available, skipping test"
     return 0
   }
 
-  echo "Installing ClawRouter as OpenClaw plugin..."
-  openclaw plugins install @blockrun/clawrouter || return 1
+  echo "Installing DOSRouter as DOSRouter plugin..."
+  dosrouter plugins install @dos/dosrouter || return 1
 
   echo "Verifying plugin is listed..."
-  openclaw plugins list | grep -q "clawrouter" || return 1
+  dosrouter plugins list | grep -q "dosrouter" || return 1
 
   return 0
 }
 
-# Test 5: OpenClaw plugin uninstall
-test_openclaw_plugin_uninstall() {
-  if ! which openclaw 2>/dev/null; then
-    echo "OpenClaw not available, skipping test"
+# Test 5: DOSRouter plugin uninstall
+test_dosrouter_plugin_uninstall() {
+  if ! which dosrouter 2>/dev/null; then
+    echo "DOSRouter not available, skipping test"
     return 0
   fi
 
-  echo "Uninstalling ClawRouter plugin..."
-  openclaw plugins uninstall clawrouter || return 1
+  echo "Uninstalling DOSRouter plugin..."
+  dosrouter plugins uninstall dosrouter || return 1
 
   echo "Verifying plugin is removed..."
-  if openclaw plugins list 2>/dev/null | grep -q "clawrouter"; then
+  if dosrouter plugins list 2>/dev/null | grep -q "dosrouter"; then
     echo "ERROR: plugin still listed after uninstall"
     return 1
   fi
@@ -533,17 +533,17 @@ test_openclaw_plugin_uninstall() {
 # Test 6: Upgrade from previous version
 test_upgrade() {
   echo "Installing older version (0.8.25)..."
-  npm install -g @blockrun/clawrouter@0.8.25
+  npm install -g @dos/dosrouter@0.8.25
 
   echo "Verifying old version..."
-  local old_version=$(clawrouter --version)
+  local old_version=$(dosrouter --version)
   echo "Installed: $old_version"
 
   echo "Upgrading to latest..."
-  npm install -g @blockrun/clawrouter@latest
+  npm install -g @dos/dosrouter@latest
 
   echo "Verifying upgrade..."
-  local new_version=$(clawrouter --version)
+  local new_version=$(dosrouter --version)
   echo "Upgraded to: $new_version"
 
   if [ "$old_version" = "$new_version" ]; then
@@ -557,31 +557,31 @@ test_upgrade() {
 # Test 7: Installation with custom wallet key
 test_custom_wallet() {
   echo "Setting custom wallet key..."
-  export BLOCKRUN_WALLET_KEY="0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+  export DOSROUTER_WALLET_KEY="0x0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
 
   echo "Installing with wallet key..."
-  npm install -g @blockrun/clawrouter@latest
+  npm install -g @dos/dosrouter@latest
 
   echo "Verifying installation..."
-  clawrouter --version || return 1
+  dosrouter --version || return 1
 
-  unset BLOCKRUN_WALLET_KEY
+  unset DOSROUTER_WALLET_KEY
   return 0
 }
 
 # Test 8: Verify package files exist
 test_package_files() {
-  echo "Installing @blockrun/clawrouter..."
-  npm install -g @blockrun/clawrouter@latest
+  echo "Installing @dos/dosrouter..."
+  npm install -g @dos/dosrouter@latest
 
   echo "Finding package installation directory..."
-  local pkg_dir=$(npm root -g)/@blockrun/clawrouter
+  local pkg_dir=$(npm root -g)/@dos/dosrouter
 
   echo "Checking for required files..."
   [ -f "$pkg_dir/dist/index.js" ] || { echo "Missing dist/index.js"; return 1; }
   [ -f "$pkg_dir/dist/cli.js" ] || { echo "Missing dist/cli.js"; return 1; }
   [ -f "$pkg_dir/package.json" ] || { echo "Missing package.json"; return 1; }
-  [ -f "$pkg_dir/openclaw.plugin.json" ] || { echo "Missing openclaw.plugin.json"; return 1; }
+  [ -f "$pkg_dir/dosrouter.plugin.json" ] || { echo "Missing dosrouter.plugin.json"; return 1; }
 
   echo "All required files present"
   return 0
@@ -589,14 +589,14 @@ test_package_files() {
 
 # Test 9: Version command accuracy
 test_version_command() {
-  echo "Installing @blockrun/clawrouter..."
-  npm install -g @blockrun/clawrouter@latest
+  echo "Installing @dos/dosrouter..."
+  npm install -g @dos/dosrouter@latest
 
   echo "Running version command..."
-  local cli_version=$(clawrouter --version)
+  local cli_version=$(dosrouter --version)
 
   echo "Reading package.json version..."
-  local pkg_dir=$(npm root -g)/@blockrun/clawrouter
+  local pkg_dir=$(npm root -g)/@dos/dosrouter
   local pkg_version=$(node -p "require('$pkg_dir/package.json').version")
 
   echo "CLI version: $cli_version"
@@ -612,18 +612,18 @@ test_version_command() {
 
 # Test 10: Full cleanup verification
 test_full_cleanup() {
-  echo "Installing @blockrun/clawrouter..."
-  npm install -g @blockrun/clawrouter@latest
+  echo "Installing @dos/dosrouter..."
+  npm install -g @dos/dosrouter@latest
 
-  echo "Finding all ClawRouter files..."
-  local pkg_dir=$(npm root -g)/@blockrun/clawrouter
-  local bin_link=$(which clawrouter)
+  echo "Finding all DOSRouter files..."
+  local pkg_dir=$(npm root -g)/@dos/dosrouter
+  local bin_link=$(which dosrouter)
 
   echo "Package dir: $pkg_dir"
   echo "Binary link: $bin_link"
 
   echo "Uninstalling..."
-  npm uninstall -g @blockrun/clawrouter
+  npm uninstall -g @dos/dosrouter
 
   echo "Verifying complete cleanup..."
   if [ -d "$pkg_dir" ]; then
@@ -642,14 +642,14 @@ test_full_cleanup() {
 
 # Run all tests
 echo "╔════════════════════════════════════════════════════════╗"
-echo "║   ClawRouter Docker Installation Test Suite          ║"
+echo "║   DOSRouter Docker Installation Test Suite          ║"
 echo "╚════════════════════════════════════════════════════════╝"
 
 test_case "1. Fresh npm global installation" test_fresh_install
 test_case "2. Uninstall verification" test_uninstall
 test_case "3. Reinstall after uninstall" test_reinstall
-test_case "4. OpenClaw plugin installation" test_openclaw_plugin_install
-test_case "5. OpenClaw plugin uninstall" test_openclaw_plugin_uninstall
+test_case "4. DOSRouter plugin installation" test_dosrouter_plugin_install
+test_case "5. DOSRouter plugin uninstall" test_dosrouter_plugin_uninstall
 test_case "6. Upgrade from previous version" test_upgrade
 test_case "7. Installation with custom wallet" test_custom_wallet
 test_case "8. Package files verification" test_package_files
@@ -681,13 +681,13 @@ set -e
 cd "$(dirname "$0")/.."
 
 echo "🐳 Building Docker test environment for installation tests..."
-docker build -f test/Dockerfile.install-test -t clawrouter-install-test .
+docker build -f test/Dockerfile.install-test -t dosrouter-install-test .
 
 echo ""
 echo "🧪 Running installation test suite (10 test cases)..."
 docker run --rm \
     -v "$(pwd)/test/docker-install-tests.sh:/test.sh:ro" \
-    clawrouter-install-test \
+    dosrouter-install-test \
     bash -c "cp /test.sh /tmp/test.sh && chmod +x /tmp/test.sh && /tmp/test.sh"
 
 echo ""
@@ -710,14 +710,14 @@ Expected output:
 🧪 Running installation test suite (10 test cases)...
 
 ╔════════════════════════════════════════════════════════╗
-║   ClawRouter Docker Installation Test Suite          ║
+║   DOSRouter Docker Installation Test Suite          ║
 ╚════════════════════════════════════════════════════════╝
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 Test: 1. Fresh npm global installation
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Installing @blockrun/clawrouter globally...
-Verifying clawrouter command exists...
+Installing @dos/dosrouter globally...
+Verifying dosrouter command exists...
 Checking version...
 0.8.30
 ✓ PASS
@@ -741,7 +741,7 @@ Test coverage:
 - Fresh npm global installation
 - Uninstall verification
 - Reinstall after uninstall
-- OpenClaw plugin install/uninstall
+- DOSRouter plugin install/uninstall
 - Upgrade from previous version
 - Custom wallet key installation
 - Package files verification
@@ -778,7 +778,7 @@ RED='\033[0;31m'
 NC='\033[0m' # No Color
 
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-echo -e "${GREEN}  ClawRouter Deployment Pipeline${NC}"
+echo -e "${GREEN}  DOSRouter Deployment Pipeline${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 
 # Step 1: Check git status (must be clean)
@@ -829,9 +829,9 @@ echo ""
 echo -e "${YELLOW}7. Running tests...${NC}"
 
 # Check if wallet key is set
-if [ -z "$BLOCKRUN_WALLET_KEY" ]; then
-  echo -e "${YELLOW}WARNING: BLOCKRUN_WALLET_KEY not set. Skipping E2E tests.${NC}"
-  echo "Set BLOCKRUN_WALLET_KEY to run E2E tests during deployment."
+if [ -z "$DOSROUTER_WALLET_KEY" ]; then
+  echo -e "${YELLOW}WARNING: DOSROUTER_WALLET_KEY not set. Skipping E2E tests.${NC}"
+  echo "Set DOSROUTER_WALLET_KEY to run E2E tests during deployment."
 else
   echo "Running E2E tests..."
   npx tsx test/test-e2e.ts
@@ -884,7 +884,7 @@ echo ""
 echo -e "${YELLOW}9. Updating version in source files...${NC}"
 cat > src/version.ts <<EOF
 /**
- * ClawRouter version
+ * DOSRouter version
  * Auto-generated during deployment
  */
 export const VERSION = "$NEW_VERSION";
@@ -914,7 +914,7 @@ echo "✓ Tag v$NEW_VERSION created"
 echo ""
 echo -e "${YELLOW}13. Ready to publish${NC}"
 echo ""
-echo "Package: @blockrun/clawrouter"
+echo "Package: @dos/dosrouter"
 echo "Version: $NEW_VERSION"
 echo "Registry: https://registry.npmjs.org"
 echo ""
@@ -950,7 +950,7 @@ if command -v gh &> /dev/null; then
   echo "✓ GitHub release created"
 else
   echo -e "${YELLOW}WARNING: gh CLI not found. Skipping GitHub release creation.${NC}"
-  echo "Create release manually at: https://github.com/BlockRunAI/ClawRouter/releases/new"
+  echo "Create release manually at: https://github.com/DOSAI/DOSRouter/releases/new"
 fi
 
 echo ""
@@ -958,9 +958,9 @@ echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━
 echo -e "${GREEN}  Deployment Complete! 🎉${NC}"
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
-echo "Package: @blockrun/clawrouter@$NEW_VERSION"
-echo "npm: https://www.npmjs.com/package/@blockrun/clawrouter"
-echo "GitHub: https://github.com/BlockRunAI/ClawRouter/releases/tag/v$NEW_VERSION"
+echo "Package: @dos/dosrouter@$NEW_VERSION"
+echo "npm: https://www.npmjs.com/package/@dos/dosrouter"
+echo "GitHub: https://github.com/DOSAI/DOSRouter/releases/tag/v$NEW_VERSION"
 echo ""
 ```
 
@@ -1011,7 +1011,7 @@ npm run typecheck
 npm run build
 
 # Test E2E (if wallet key set)
-BLOCKRUN_WALLET_KEY=0x... npx tsx test/test-e2e.ts
+DOSROUTER_WALLET_KEY=0x... npx tsx test/test-e2e.ts
 ```
 
 ### Step 5: Document deployment process
@@ -1019,11 +1019,11 @@ BLOCKRUN_WALLET_KEY=0x... npx tsx test/test-e2e.ts
 **Create `docs/deployment.md`:**
 
 ````markdown
-# ClawRouter Deployment Guide
+# DOSRouter Deployment Guide
 
 ## Prerequisites
 
-1. **npm account with publish access** to `@blockrun/clawrouter`
+1. **npm account with publish access** to `@dos/dosrouter`
 2. **GitHub CLI (`gh`)** installed (optional, for automated release creation)
 3. **Funded wallet** for E2E tests (optional, but recommended)
 
@@ -1033,7 +1033,7 @@ BLOCKRUN_WALLET_KEY=0x... npx tsx test/test-e2e.ts
 
 ```bash
 # Set wallet key for E2E tests (optional)
-export BLOCKRUN_WALLET_KEY=0x...
+export DOSROUTER_WALLET_KEY=0x...
 
 # Run deployment script
 npm run deploy
@@ -1095,10 +1095,10 @@ gh release create v0.8.31 --title "v0.8.31" --generate-notes
 
 ## Post-Deployment Verification
 
-1. Check npm package: https://www.npmjs.com/package/@blockrun/clawrouter
-2. Verify installation: `npm install -g @blockrun/clawrouter@latest`
-3. Test version: `clawrouter --version`
-4. Check GitHub release: https://github.com/BlockRunAI/ClawRouter/releases
+1. Check npm package: https://www.npmjs.com/package/@dos/dosrouter
+2. Verify installation: `npm install -g @dos/dosrouter@latest`
+3. Test version: `dosrouter --version`
+4. Check GitHub release: https://github.com/DOSAI/DOSRouter/releases
 
 ## Rollback
 
@@ -1114,7 +1114,7 @@ git revert HEAD
 git push origin main
 
 # Unpublish from npm (within 72 hours)
-npm unpublish @blockrun/clawrouter@0.8.31
+npm unpublish @dos/dosrouter@0.8.31
 ```
 
 ## Troubleshooting
@@ -1142,7 +1142,7 @@ git checkout main
 Set wallet key:
 
 ```bash
-export BLOCKRUN_WALLET_KEY=0x...
+export DOSROUTER_WALLET_KEY=0x...
 ```
 
 Or skip E2E tests (not recommended):
@@ -1171,7 +1171,7 @@ Expected output:
 
 ```
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  ClawRouter Deployment Pipeline
+  DOSRouter Deployment Pipeline
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 1. Checking git status...
@@ -1220,7 +1220,7 @@ Enter choice (1-4): 1
 
 13. Ready to publish
 
-Package: @blockrun/clawrouter
+Package: @dos/dosrouter
 Version: 0.8.31
 Registry: https://registry.npmjs.org
 

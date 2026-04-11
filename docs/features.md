@@ -1,6 +1,6 @@
 # Advanced Features
 
-ClawRouter v0.5+ includes intelligent routing features that work automatically.
+DOSRouter v0.5+ includes intelligent routing features that work automatically.
 
 ## Table of Contents
 
@@ -17,7 +17,7 @@ ClawRouter v0.5+ includes intelligent routing features that work automatically.
 
 ## Response Cache
 
-ClawRouter includes LLM response caching inspired by LiteLLM's caching system. Identical requests return cached responses, saving both cost and latency.
+DOSRouter includes LLM response caching inspired by LiteLLM's caching system. Identical requests return cached responses, saving both cost and latency.
 
 **How it works:**
 
@@ -40,7 +40,7 @@ Request: "What is 2+2?"
 
 The cache key is a SHA-256 hash of the request body (model + messages + params), with normalization:
 
-- Message timestamps stripped (OpenClaw injects `[Mon 2024-01-15 10:30 UTC]`)
+- Message timestamps stripped (DOSRouter injects `[Mon 2024-01-15 10:30 UTC]`)
 - Keys sorted for consistent hashing
 - Stream mode, user, and request_id fields excluded
 
@@ -54,7 +54,7 @@ fetch("/v1/chat/completions", {
 
 // Via body
 {
-  "model": "blockrun/auto",
+  "model": "dos/auto",
   "cache": false,  // or "no_cache": true
   "messages": [...]
 }
@@ -84,7 +84,7 @@ Response:
 Response caching is enabled by default with sensible defaults. For advanced tuning, the cache can be configured programmatically:
 
 ```typescript
-import { ResponseCache } from "@blockrun/clawrouter";
+import { ResponseCache } from "@DOS/DOSRouter";
 
 const cache = new ResponseCache({
   maxSize: 500, // Max cached responses
@@ -98,7 +98,7 @@ const cache = new ResponseCache({
 
 ## Agentic Auto-Detection
 
-ClawRouter automatically detects multi-step agentic tasks and routes to models optimized for autonomous execution:
+DOSRouter automatically detects multi-step agentic tasks and routes to models optimized for autonomous execution:
 
 ```
 "what is 2+2"                    → gemini-flash (standard)
@@ -126,9 +126,9 @@ ClawRouter automatically detects multi-step agentic tasks and routes to models o
 You can also force agentic mode via config:
 
 ```yaml
-# openclaw.yaml
+# dosrouter.yaml
 plugins:
-  - id: "@blockrun/clawrouter"
+  - id: "@DOS/DOSRouter"
     config:
       routing:
         overrides:
@@ -139,12 +139,12 @@ plugins:
 
 ## Tool Detection
 
-When your request includes a `tools` array (function calling), ClawRouter automatically switches to agentic tiers:
+When your request includes a `tools` array (function calling), DOSRouter automatically switches to agentic tiers:
 
 ```typescript
 // Request with tools → auto-agentic mode
 {
-  model: "blockrun/auto",
+  model: "dos/auto",
   messages: [{ role: "user", content: "Check the weather" }],
   tools: [{ type: "function", function: { name: "get_weather", ... } }]
 }
@@ -158,7 +158,7 @@ When your request includes a `tools` array (function calling), ClawRouter automa
 
 ## Context-Length-Aware Routing
 
-ClawRouter automatically filters out models that can't handle your context size:
+DOSRouter automatically filters out models that can't handle your context size:
 
 ```
 150K token request:
@@ -191,13 +191,13 @@ Use short aliases instead of full model paths:
 /model grok-fast # xai/grok-4-fast-reasoning
 ```
 
-All aliases work with `/model blockrun/xxx` or just `/model xxx`.
+All aliases work with `/model dos/xxx` or just `/model xxx`.
 
 ---
 
 ## Free Tier Fallback
 
-When your wallet balance hits $0, ClawRouter automatically falls back to the free model (`gpt-oss-120b`):
+When your wallet balance hits $0, DOSRouter automatically falls back to the free model (`gpt-oss-120b`):
 
 ```
 Wallet: $0.00
@@ -213,7 +213,7 @@ You'll never get blocked by an empty wallet — the free tier keeps you running.
 
 ## Session Persistence
 
-For multi-turn conversations, ClawRouter pins the model to prevent mid-task switching:
+For multi-turn conversations, DOSRouter pins the model to prevent mid-task switching:
 
 ```
 Turn 1: "Build a React component" → claude-sonnet-4.6
@@ -230,7 +230,7 @@ Sessions are identified by conversation ID and persist for 1 hour of inactivity.
 Track your savings in real-time:
 
 ```bash
-# In any OpenClaw conversation
+# In any DOSRouter conversation
 /stats
 ```
 
@@ -238,7 +238,7 @@ Output:
 
 ```
 +============================================================+
-|              ClawRouter Usage Statistics                   |
+|              DOSRouter Usage Statistics                   |
 +============================================================+
 |  Period: last 7 days                                      |
 |  Total Requests: 442                                      |
@@ -254,4 +254,4 @@ Output:
 +============================================================+
 ```
 
-Stats are stored locally at `~/.openclaw/blockrun/logs/` and aggregated on demand.
+Stats are stored locally at `~/.dosrouter/dos/logs/` and aggregated on demand.

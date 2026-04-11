@@ -186,9 +186,13 @@ func ResolveModelAlias(model string) string {
 		return resolved
 	}
 
-	// Strip "blockrun/" prefix
-	if strings.HasPrefix(normalized, "blockrun/") {
-		withoutPrefix := normalized[len("blockrun/"):]
+	// Strip "dosrouter/" prefix (legacy "blockrun/" also supported)
+	if strings.HasPrefix(normalized, "dosrouter/") || strings.HasPrefix(normalized, "blockrun/") {
+		prefix := "dosrouter/"
+		if strings.HasPrefix(normalized, "blockrun/") {
+			prefix = "blockrun/"
+		}
+		withoutPrefix := normalized[len(prefix):]
 		if resolved, ok := ModelAliases[withoutPrefix]; ok {
 			return resolved
 		}

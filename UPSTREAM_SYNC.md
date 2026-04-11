@@ -8,18 +8,24 @@
 
 1. Check new releases: `gh api repos/BlockRunAI/ClawRouter/releases --jq '.[].tag_name' | head -20`
 2. Review changelog for each release since last synced version
-3. Classify changes: **port** (routing/model/strategy logic) or **skip** (TS-specific, payment, plugin)
+3. Classify changes: **port** or **skip** (TS-specific)
 4. Port in batches, commit with: `port: <summary> (upstream vX.Y.Z)`
 5. Update "Last synced" above after each sync session
 
 ## Scope
 
-DOSRouter ports **routing logic only**. These upstream areas are excluded:
-- Payment/wallet (Solana, EVM, x402)
+DOSRouter is a **full Go port** of ClawRouter. The following upstream areas are adapted:
+
+- **Routing**: Full 15-dimension scorer, tier-based model selection, fallback chains
+- **Payment**: x402 protocol ported for EVM chains (DOS Chain, Base, Avalanche)
+- **Wallet**: BIP-39 mnemonic, EVM key derivation, balance queries
+- **CLI**: serve, classify, models, stats, logs, cache, report, wallet, chain, doctor
+- **Image gen**: `/v1/images/generations` passthrough endpoint
+- **Docs**: All documentation updated for DOSRouter standalone
+
+These upstream areas are excluded (TS/npm-specific):
 - OpenClaw plugin lifecycle (register, reload, baseUrl)
-- Web search providers
-- Image/music generation
-- CLI commands (/wallet, /doctor, /update)
+- Solana wallet/payment (EVM-only in DOSRouter)
 - Node.js/npm-specific (prettier, package.json, CI)
 
 ## Sync Log
@@ -38,16 +44,25 @@ DOSRouter ports **routing logic only**. These upstream areas are excluded:
 | v0.12.143 | SKIP | Prettier formatting | TS-only |
 | v0.12.142 | SKIP | Deferred proxy startup for plugin config | OpenClaw plugin lifecycle |
 | v0.12.141 | DONE | Agentic mode 3-state semantics | `nil`=auto, `true`=force, `false`=disable |
-| v0.12.140 | SKIP | Solana doctor fix | Payment module |
+| v0.12.140 | SKIP | Solana doctor fix | Solana-only, DOSRouter is EVM-only |
 | v0.12.139 | DONE | Model roster: GLM-5.1 allowlist, nvidia/kimi | Ported model + alias changes |
 | v0.12.92 | DONE | `normalizeMessagesForThinking` | reasoning_content on all assistant msgs |
 | v0.12.90 | DONE | Empty turn fallback detection | Detect empty + no tool_calls as degraded |
 | v0.12.69 | DONE | GPT-5.4 Mini + model roster updates | New model + alias + tier config updates |
-| v0.12.66 | SKIP | Payment settlement fallback | Payment module (DOSRouter scope: no payment) |
-| v0.12.65 | SKIP | Pre-auth cache key fix | Payment module |
-| v0.12.64 | SKIP | Reviewed - plugin/payment only | No routing changes |
-| v0.12.56 | SKIP | Reviewed - plugin/payment only | No routing changes |
-| v0.12.30 | SKIP | Reviewed - plugin/payment only | No routing changes |
-| v0.12.25 | SKIP | Reviewed - plugin/payment only | No routing changes |
-| v0.12.24 | SKIP | Reviewed - plugin/payment only | No routing changes |
-| v0.12.10 | SKIP | /stats clear command | CLI-only, not applicable to Go proxy |
+| v0.12.66 | DONE | Payment settlement fallback | Adapted: structured fallback error for all models |
+| v0.12.65 | DONE | Pre-auth cache key fix | Adapted: cache key includes model in payment module |
+| v0.12.64 | DONE | Cost headers, model injection, structured fallback | Cost header, model in SSE chunks, all-models-failed error |
+| v0.12.56 | DONE | GLM-5 model picker | Included in model roster updates |
+| v0.12.30 | SKIP | Empty release | No changes |
+| v0.12.25 | DONE | Docs refresh | Architecture, configuration, troubleshooting updated |
+| v0.12.24 | SKIP | Preserve user allowlist on restart | OpenClaw plugin-specific |
+| v0.12.10 | DONE | /stats clear command | Ported as `dosrouter stats clear` CLI command |
+
+### 2026-04-11 - Full port expansion
+- Added: wallet module (EVM key derivation, DOS Chain/Base/Avalanche)
+- Added: payment module (x402 protocol, pre-auth cache)
+- Added: image generation endpoint (`/v1/images/generations`)
+- Added: CLI commands (cache, report, wallet, chain, doctor, stats clear)
+- Updated: all docs rebranded from ClawRouter/BlockRun to DOSRouter
+- Updated: config paths from `~/.openclaw/blockrun/` to `~/.dosrouter/`
+- Updated: model prefix from `blockrun/` to `dosrouter/`

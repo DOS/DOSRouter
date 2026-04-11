@@ -1,10 +1,10 @@
 # Routing Profiles & Pricing
 
-ClawRouter offers four routing profiles to balance cost vs quality. Prices are in **$/M tokens** (input/output).
+DOSRouter offers four routing profiles to balance cost vs quality. Prices are in **$/M tokens** (input/output).
 
 ## ECO (Absolute Cheapest)
 
-Use `blockrun/eco` for maximum cost savings.
+Use `dos/eco` for maximum cost savings.
 
 | Tier      | Primary Model                | Input | Output |
 | --------- | ---------------------------- | ----- | ------ |
@@ -17,7 +17,7 @@ Use `blockrun/eco` for maximum cost savings.
 
 ## AUTO (Balanced - Default)
 
-Use `blockrun/auto` for the best quality/price balance.
+Use `dos/auto` for the best quality/price balance.
 
 | Tier      | Primary Model               | Input | Output |
 | --------- | --------------------------- | ----- | ------ |
@@ -30,7 +30,7 @@ Use `blockrun/auto` for the best quality/price balance.
 
 ## PREMIUM (Best Quality)
 
-Use `blockrun/premium` for maximum quality.
+Use `dos/premium` for maximum quality.
 
 | Tier      | Primary Model        | Input | Output |
 | --------- | -------------------- | ----- | ------ |
@@ -43,7 +43,7 @@ Use `blockrun/premium` for maximum quality.
 
 ## AGENTIC (Multi-Step Tasks)
 
-Use `blockrun/agentic` for autonomous multi-step tasks, or let ClawRouter auto-detect agentic patterns.
+Use `dos/agentic` for autonomous multi-step tasks, or let DOSRouter auto-detect agentic patterns.
 
 | Tier      | Primary Model        | Input | Output |
 | --------- | -------------------- | ----- | ------ |
@@ -67,7 +67,7 @@ Use `blockrun/agentic` for autonomous multi-step tasks, or let ClawRouter auto-d
 
 ## How Tiers Work
 
-ClawRouter automatically classifies your query into one of four tiers:
+DOSRouter automatically classifies your query into one of four tiers:
 
 - **SIMPLE**: Basic questions, short responses, simple lookups
 - **MEDIUM**: Code generation, moderate complexity tasks

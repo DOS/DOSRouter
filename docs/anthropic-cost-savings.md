@@ -1,4 +1,4 @@
-# Stop Overpaying for Claude: How ClawRouter Cuts Your Anthropic Bill by 70%
+# Stop Overpaying for Claude: How DOSRouter Cuts Your Anthropic Bill by 70%
 
 _You love Claude. Your wallet doesn't. Here's how to keep frontier-quality answers — at a fraction of the cost._
 
@@ -48,13 +48,13 @@ This is where you're paying for real value:
 
 ---
 
-## The Solution: ClawRouter
+## The Solution: DOSRouter
 
-[ClawRouter](https://github.com/blockrunai/ClawRouter) is an open-source local proxy that sits between your app and 41+ AI models. It saves you money in three ways: **smart routing**, **token optimization**, and **response caching**.
+[DOSRouter](https://github.com/dosai/DOSRouter) is an open-source local proxy that sits between your app and 41+ AI models. It saves you money in three ways: **smart routing**, **token optimization**, and **response caching**.
 
 ```
 ┌─────────────┐     ┌──────────────────────────────┐     ┌──────────────────┐
-│  Your App    │────▶│       ClawRouter              │────▶│  41+ AI Models   │
+│  Your App    │────▶│       DOSRouter              │────▶│  41+ AI Models   │
 │  (OpenAI     │     │       (local proxy)           │     │                  │
 │   SDK)       │     │                               │     │  FREE  (11 free) │
 │              │     │  1. Route to cheapest model    │     │  $0.10 (gemini)  │
@@ -69,7 +69,7 @@ This is where you're paying for real value:
 
 ### Layer 1: Smart Routing (the biggest win)
 
-ClawRouter scores every prompt against 14 dimensions in <1ms and routes it to the cheapest model that can handle the task.
+DOSRouter scores every prompt against 14 dimensions in <1ms and routes it to the cheapest model that can handle the task.
 
 ```
 "What is the capital of France?"
@@ -103,7 +103,7 @@ From real production data across 20,000+ paying user requests:
 
 ### Layer 2: Token Compression (saves on every request)
 
-Even when a request does go to Claude, ClawRouter reduces the tokens you pay for. The proxy runs a multi-layer compression pipeline on your request **before** sending it to the provider — and you pay based on the **compressed** token count, not the original.
+Even when a request does go to Claude, DOSRouter reduces the tokens you pay for. The proxy runs a multi-layer compression pipeline on your request **before** sending it to the provider — and you pay based on the **compressed** token count, not the original.
 
 **How it works:**
 
@@ -123,11 +123,11 @@ This matters most on expensive models. If you're sending a 50K-token agent conve
 
 ### Layer 3: Response Cache + Request Deduplication (saves 100%)
 
-ClawRouter caches responses locally. If your app sends the same request within 10 minutes, you get an instant response at **zero cost** — no API call, no tokens billed.
+DOSRouter caches responses locally. If your app sends the same request within 10 minutes, you get an instant response at **zero cost** — no API call, no tokens billed.
 
 This is more common than you'd think:
 
-- **Retry logic** — Your app retries on timeout. Without dedup, you pay twice. With ClawRouter, the retry resolves from cache instantly.
+- **Retry logic** — Your app retries on timeout. Without dedup, you pay twice. With DOSRouter, the retry resolves from cache instantly.
 - **Redundant requests** — Multiple users or processes asking the same thing? One API call, multiple responses.
 - **Agent loops** — Agentic frameworks often re-query with identical context. Cache catches these.
 
@@ -152,7 +152,7 @@ The deduplicator also catches in-flight duplicates: if two identical requests ar
 | All Claude Sonnet | $30.00             | $75.00             | **$105.00**   |
 | All Claude Opus   | $50.00             | $125.00            | **$175.00**   |
 
-### ClawRouter (real paying-user distribution)
+### DOSRouter (real paying-user distribution)
 
 | Tier                     | % Requests | Routed To             | Cost        |
 | ------------------------ | ---------- | --------------------- | ----------- |
@@ -175,7 +175,7 @@ The deduplicator also catches in-flight duplicates: if two identical requests ar
 | -------------------- | ------------ | -------------------------------- |
 | Direct Claude Sonnet | $105.00      | —                                |
 | Direct Claude Opus   | $175.00      | —                                |
-| **ClawRouter**       | **~$20**     | **~81% vs Sonnet, ~89% vs Opus** |
+| **DOSRouter**       | **~$20**     | **~81% vs Sonnet, ~89% vs Opus** |
 
 Breaking down where the savings come from:
 
@@ -190,7 +190,7 @@ Breaking down where the savings come from:
 
 ## How the 14-Dimension Router Works
 
-ClawRouter runs a weighted scoring algorithm on every prompt — entirely locally, in under 1 millisecond, zero external API calls.
+DOSRouter runs a weighted scoring algorithm on every prompt — entirely locally, in under 1 millisecond, zero external API calls.
 
 | Dimension            | Weight | Detects                                    |
 | -------------------- | ------ | ------------------------------------------ |
@@ -227,7 +227,7 @@ Multilingual support across 9 languages. Tool-calling and vision requests automa
 ### Step 1: Install
 
 ```bash
-npx @blockrun/clawrouter
+npx @dos/dosrouter
 ```
 
 Starts a local proxy on port 8402. Auto-generates a crypto wallet. Done.
@@ -241,11 +241,11 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:8402/v1",  # ← was: https://api.anthropic.com
-    api_key="unused"                       # ← ClawRouter handles auth
+    api_key="unused"                       # ← DOSRouter handles auth
 )
 
 response = client.chat.completions.create(
-    model="blockrun/auto",                 # ← was: claude-sonnet-4.6
+    model="dos/auto",                 # ← was: claude-sonnet-4.6
     messages=[{"role": "user", "content": "Your prompt here"}]
 )
 ```
@@ -261,17 +261,17 @@ const client = new OpenAI({
 });
 
 const response = await client.chat.completions.create({
-  model: "blockrun/auto", // or "eco" for max savings, "premium" for best quality
+  model: "dos/auto", // or "eco" for max savings, "premium" for best quality
   messages: [{ role: "user", content: "Your prompt here" }],
 });
 ```
 
 **Routing profiles:**
 
-- `blockrun/auto` — Balanced cost/quality (default)
-- `blockrun/eco` — Maximum savings (free tier aggressively)
-- `blockrun/premium` — Best quality (Opus/Sonnet/GPT-5)
-- `blockrun/free` — Free tier only (gpt-oss-120b)
+- `dos/auto` — Balanced cost/quality (default)
+- `dos/eco` — Maximum savings (free tier aggressively)
+- `dos/premium` — Best quality (Opus/Sonnet/GPT-5)
+- `dos/free` — Free tier only (gpt-oss-120b)
 
 ### Step 3: Fund (optional)
 
@@ -290,7 +290,7 @@ That's it. Your existing code works. Your output quality on complex tasks stays 
 $ /stats 7
 
 ╔═══════════════════════════════════════════════════════╗
-║        ClawRouter v0.12.12 — Usage Statistics         ║
+║        DOSRouter v0.12.12 — Usage Statistics         ║
 ╠═══════════════════════════════════════════════════════╣
 ║  Period: last 7 days                                  ║
 ║  Total Requests: 1,523                                ║
@@ -307,9 +307,9 @@ $ /stats 7
 
 ---
 
-## Why ClawRouter Instead of OpenRouter?
+## Why DOSRouter Instead of OpenRouter?
 
-|                        | ClawRouter                                          | OpenRouter                         |
+|                        | DOSRouter                                          | OpenRouter                         |
 | ---------------------- | --------------------------------------------------- | ---------------------------------- |
 | **Smart routing**      | Automatic — 14-dimension scorer picks the model     | Manual — you pick the model        |
 | **Token optimization** | Built-in compression (7-15% savings)                | None                               |
@@ -321,7 +321,7 @@ $ /stats 7
 | **API keys**           | Zero — proxy handles all auth                       | You manage keys per provider       |
 | **Algorithm**          | Open-source, MIT license, modify it yourself        | Proprietary                        |
 
-The fundamental difference: **OpenRouter is a model marketplace where you choose.** ClawRouter is an intelligent proxy that **chooses for you**, compresses your tokens, caches your responses, and pays per-request with crypto from your own wallet.
+The fundamental difference: **OpenRouter is a model marketplace where you choose.** DOSRouter is an intelligent proxy that **chooses for you**, compresses your tokens, caches your responses, and pays per-request with crypto from your own wallet.
 
 ---
 
@@ -330,7 +330,7 @@ The fundamental difference: **OpenRouter is a model marketplace where you choose
 | What                 | Details                                                                    |
 | -------------------- | -------------------------------------------------------------------------- |
 | **Problem**          | You pay Claude $3-25/M tokens on every request, but ~70% don't need Claude |
-| **Solution**         | ClawRouter auto-routes + compresses + caches                               |
+| **Solution**         | DOSRouter auto-routes + compresses + caches                               |
 | **Savings**          | ~81% vs Sonnet, ~89% vs Opus                                               |
 | **How**              | Routing (68%) + token compression (7-15%) + caching (3-5%)                 |
 | **Code change**      | 2 lines (base_url + model name)                                            |
@@ -340,15 +340,15 @@ The fundamental difference: **OpenRouter is a model marketplace where you choose
 
 ```bash
 # Start saving now:
-npx @blockrun/clawrouter
+npx @dos/dosrouter
 ```
 
 **Links:**
 
-- [ClawRouter on GitHub](https://github.com/blockrunai/ClawRouter) — MIT License
-- [BlockRun](https://blockrun.ai) — AI model marketplace
+- [DOSRouter on GitHub](https://github.com/dosai/DOSRouter) — MIT License
+- [DOS](https://dos.ai) — AI model marketplace
 - [x402 Protocol](https://www.x402.org/) — Per-request crypto payments for AI
 
 ---
 
-_Cost data based on real production traffic from paying users across 20,000+ requests, March 2026. Savings vary by workload — agent-heavy and long-context workloads see larger compression benefits. ClawRouter is open-source and part of the BlockRun ecosystem._
+_Cost data based on real production traffic from paying users across 20,000+ requests, March 2026. Savings vary by workload — agent-heavy and long-context workloads see larger compression benefits. DOSRouter is open-source and part of the DOS ecosystem._

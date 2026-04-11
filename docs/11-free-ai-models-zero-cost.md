@@ -1,4 +1,4 @@
-# 11 Free AI Models, Zero Cost: How BlockRun Gives Developers Top-Tier LLMs for Nothing
+# 11 Free AI Models, Zero Cost: How DOS Gives Developers Top-Tier LLMs for Nothing
 
 ## The Cost Problem Nobody Talks About
 
@@ -10,13 +10,13 @@ You're not just paying for intelligence. You're paying for every mistake, every 
 
 **What if you had 11 high-quality LLMs — completely free, unlimited calls, 128K context — and could use them right now?**
 
-BlockRun's answer: just take them.
+DOS's answer: just take them.
 
 ---
 
 ## The Lineup: 11 Models, $0.00
 
-Through [ClawRouter](https://github.com/blockrunai/ClawRouter) — BlockRun's local AI routing proxy — you get zero-cost access to the following:
+Through [DOSRouter](https://github.com/dosai/DOSRouter) — DOS's local AI routing proxy — you get zero-cost access to the following:
 
 | Model                     | Parameters | Context | Reasoning | Best For                                      |
 | ------------------------- | ---------- | ------- | --------- | --------------------------------------------- |
@@ -40,21 +40,21 @@ This isn't "free for your first 1,000 requests." It's not "free but rate-limited
 
 ## Why Free?
 
-BlockRun's business model is simple: **make the best models accessible, charge only for the premium ones.**
+DOS's business model is simple: **make the best models accessible, charge only for the premium ones.**
 
-The 11 free models are BlockRun's foundation tier. They cover the vast majority of everyday developer tasks — chat, coding, translation, summarization, lightweight reasoning — without costing a cent. When you need heavier firepower (Claude Opus 4, GPT-4o, o3), BlockRun charges per-call via [x402 micropayments](https://www.x402.org/). No subscriptions, no monthly minimums — just pay for what you use, only when you need to.
+The 11 free models are DOS's foundation tier. They cover the vast majority of everyday developer tasks — chat, coding, translation, summarization, lightweight reasoning — without costing a cent. When you need heavier firepower (Claude Opus 4, GPT-4o, o3), DOS charges per-call via [x402 micropayments](https://www.x402.org/). No subscriptions, no monthly minimums — just pay for what you use, only when you need to.
 
-The free tier isn't a loss leader. It's the product. BlockRun believes baseline AI capability should be accessible to every developer, regardless of budget. The premium tier exists for tasks that genuinely demand it.
+The free tier isn't a loss leader. It's the product. DOS believes baseline AI capability should be accessible to every developer, regardless of budget. The premium tier exists for tasks that genuinely demand it.
 
 ---
 
 ## Not Just Free: How Smart Routing Squeezes Every Dollar
 
-ClawRouter's value proposition isn't just "here are free models." It's **intelligent routing** — automatically selecting the right model for each request based on prompt complexity.
+DOSRouter's value proposition isn't just "here are free models." It's **intelligent routing** — automatically selecting the right model for each request based on prompt complexity.
 
 ### The Four-Tier Architecture
 
-ClawRouter classifies every incoming request into one of four complexity tiers:
+DOSRouter classifies every incoming request into one of four complexity tiers:
 
 | Tier          | Typical Tasks                         | ECO Route (Cheapest)          | AUTO Route (Balanced) |
 | ------------- | ------------------------------------- | ----------------------------- | --------------------- |
@@ -78,8 +78,8 @@ Assume 100 requests per day, distributed roughly as:
 | --------------------------- | ---------------------- |
 | Pure Claude Opus 4          | ~$75–150               |
 | Pure GPT-4o                 | ~$15–30                |
-| ClawRouter AUTO mode        | ~$5–10                 |
-| ClawRouter ECO mode         | ~$1–3                  |
+| DOSRouter AUTO mode        | ~$5–10                 |
+| DOSRouter ECO mode         | ~$1–3                  |
 | Manual free model selection | **$0**                 |
 
 **ECO mode saves 92%+ compared to Claude Opus alone.**
@@ -90,7 +90,7 @@ Assume 100 requests per day, distributed roughly as:
 
 ### GPT-OSS 120B / 20B — The Workhorse
 
-GPT-OSS is BlockRun's default general-purpose free model. The 120B version is ClawRouter's **default SIMPLE-tier model** in ECO mode and the **ultimate fallback** when wallet balance runs low. It handles conversation, text generation, and summarization with reliable consistency.
+GPT-OSS is DOS's default general-purpose free model. The 120B version is DOSRouter's **default SIMPLE-tier model** in ECO mode and the **ultimate fallback** when wallet balance runs low. It handles conversation, text generation, and summarization with reliable consistency.
 
 The 20B variant trades capability for speed — noticeably faster responses for tasks that don't need the bigger model's muscle.
 
@@ -98,7 +98,7 @@ The 20B variant trades capability for speed — noticeably faster responses for 
 
 ### Nemotron Ultra 253B — The Free Flagship
 
-253 billion parameters. Reasoning capability. 131K context window. Nemotron Ultra is the **single strongest free model on BlockRun** — and it's the default when you type `/model free` in ClawRouter.
+253 billion parameters. Reasoning capability. 131K context window. Nemotron Ultra is the **single strongest free model on DOS** — and it's the default when you type `/model free` in DOSRouter.
 
 This is the model you reach for when the task is genuinely hard but you don't want to pay for it. Complex analysis, multi-step planning, mathematical reasoning — Nemotron Ultra handles them with surprising competence for a zero-cost option.
 
@@ -112,7 +112,7 @@ The Nemotron family gives you three reasoning-capable models at different scales
 
 ### DeepSeek V3.2 — The Developer's Weapon
 
-DeepSeek has consistently punched above its weight on coding benchmarks. V3.2 adds reasoning capability on top of already strong code generation. It's ClawRouter's **MEDIUM-tier primary in ECO mode** — the model that handles your everyday coding tasks for free.
+DeepSeek has consistently punched above its weight on coding benchmarks. V3.2 adds reasoning capability on top of already strong code generation. It's DOSRouter's **MEDIUM-tier primary in ECO mode** — the model that handles your everyday coding tasks for free.
 
 **Best for:** Code generation and completion, code review and refactoring, technical design, debugging and error analysis.
 
@@ -150,14 +150,14 @@ Meta's newest open-source model represents the current state of the art in open 
 
 ## Get Started in 5 Minutes
 
-### Option 1: Via ClawRouter (Recommended)
+### Option 1: Via DOSRouter (Recommended)
 
 ```bash
 # Install
-npm install -g @blockrun/clawrouter
+npm install -g @dos/dosrouter
 
 # Start the local proxy
-clawrouter start
+dosrouter start
 ```
 
 ```python
@@ -165,7 +165,7 @@ from openai import OpenAI
 
 client = OpenAI(
     base_url="http://localhost:4402/v1",
-    api_key="your-blockrun-key"
+    api_key="your-dos-key"
 )
 
 # Pick a specific free model
@@ -207,7 +207,7 @@ None of these 11 models have **structured function calling (tool use) enabled.**
 
 ### 2. Reasoning Has a Ceiling
 
-Seven models are marked reasoning-capable, and they handle most tasks well. But on the hardest problems — competition-level math, formal proofs, deep multi-step planning — they don't match Claude Opus 4 or o3. That's why ClawRouter's REASONING tier doesn't use free models.
+Seven models are marked reasoning-capable, and they handle most tasks well. But on the hardest problems — competition-level math, formal proofs, deep multi-step planning — they don't match Claude Opus 4 or o3. That's why DOSRouter's REASONING tier doesn't use free models.
 
 ### 3. Context Is Large, Not Largest
 
@@ -247,11 +247,11 @@ Look at the cost trajectory over the past three years:
 - **2023:** GPT-4 dominates alone at $30/$60 per M tokens
 - **2024:** Open-source models surge, prices halve repeatedly
 - **2025:** DeepSeek, Qwen push top-tier inference below $1/M
-- **2026:** BlockRun offers 11 free models through a single API
+- **2026:** DOS offers 11 free models through a single API
 
 **Eleven free models isn't just a product feature — it's a signal.** Baseline AI capability is becoming infrastructure. Like internet bandwidth before it, the cost of "good enough" AI inference is converging toward zero.
 
-BlockRun and ClawRouter exist to be the **routing layer** in this transition: not locked to any single provider, not bound to any single model, always giving developers the lowest-cost path to the right capability.
+DOS and DOSRouter exist to be the **routing layer** in this transition: not locked to any single provider, not bound to any single model, always giving developers the lowest-cost path to the right capability.
 
 Today it's 11 free models. Tomorrow it could be 50. Prices will only drop. Capabilities will only improve.
 
@@ -262,8 +262,8 @@ Today it's 11 free models. Tomorrow it could be 50. Prices will only drop. Capab
 ## Start Now
 
 ```bash
-npm install -g @blockrun/clawrouter
-clawrouter start
+npm install -g @dos/dosrouter
+dosrouter start
 ```
 
 Point your `base_url` to `http://localhost:4402/v1`. That's the whole setup.
@@ -274,4 +274,4 @@ Go build something.
 
 ---
 
-_Based on ClawRouter v0.12.84. Model availability may change with future releases. For the latest information, visit [blockrun.ai](https://blockrun.ai)._
+_Based on DOSRouter v0.12.84. Model availability may change with future releases. For the latest information, visit [dos.ai](https://dos.ai)._

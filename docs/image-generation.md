@@ -1,6 +1,6 @@
 # Image Generation & Editing
 
-Generate and edit images via BlockRun's image API with x402 micropayments — no API keys, pay per image.
+Generate and edit images via DOS's image API with x402 micropayments — no API keys, pay per image.
 
 ## Table of Contents
 
@@ -19,7 +19,7 @@ Generate and edit images via BlockRun's image API with x402 micropayments — no
 
 ## Quick Start
 
-ClawRouter runs a local proxy on port `8402` that handles x402 payments automatically. Point any OpenAI-compatible client at it:
+DOSRouter runs a local proxy on port `8402` that handles x402 payments automatically. Point any OpenAI-compatible client at it:
 
 ```bash
 curl -X POST http://localhost:8402/v1/images/generations \
@@ -67,7 +67,7 @@ Default model: `google/nano-banana`.
 
 ### `POST /v1/images/generations`
 
-OpenAI-compatible endpoint. Route via ClawRouter proxy (`http://localhost:8402`) for automatic x402 payment handling.
+OpenAI-compatible endpoint. Route via DOSRouter proxy (`http://localhost:8402`) for automatic x402 payment handling.
 
 **Request body:**
 
@@ -92,7 +92,7 @@ OpenAI-compatible endpoint. Route via ClawRouter proxy (`http://localhost:8402`)
 
 ### `POST /v1/images/image2image`
 
-Edit an existing image using AI. Route via ClawRouter proxy (`http://localhost:8402`) for automatic x402 payment handling.
+Edit an existing image using AI. Route via DOSRouter proxy (`http://localhost:8402`) for automatic x402 payment handling.
 
 **Request body:**
 
@@ -108,9 +108,9 @@ Edit an existing image using AI. Route via ClawRouter proxy (`http://localhost:8
 
 | Format             | Example                            | Description                                    |
 | ------------------ | ---------------------------------- | ---------------------------------------------- |
-| Local file path    | `"/Users/me/photo.png"`            | Absolute path — ClawRouter reads the file      |
+| Local file path    | `"/Users/me/photo.png"`            | Absolute path — DOSRouter reads the file      |
 | Home-relative path | `"~/photo.png"`                    | Expands `~` to home directory                  |
-| HTTP/HTTPS URL     | `"https://example.com/photo.png"`  | ClawRouter downloads the image automatically   |
+| HTTP/HTTPS URL     | `"https://example.com/photo.png"`  | DOSRouter downloads the image automatically   |
 | Base64 data URI    | `"data:image/png;base64,iVBOR..."` | Passed through directly (no conversion needed) |
 
 Supported image formats: **PNG**, **JPG/JPEG**, **WebP**.
@@ -206,7 +206,7 @@ print(image_url)
 import OpenAI from "openai";
 
 const client = new OpenAI({
-  apiKey: "blockrun", // any non-empty string
+  apiKey: "dos", // any non-empty string
   baseURL: "http://localhost:8402/v1",
 });
 
@@ -222,12 +222,12 @@ console.log(response.data[0].url);
 
 ### startProxy (programmatic)
 
-If you're using ClawRouter as a library:
+If you're using DOSRouter as a library:
 
 ```typescript
-import { startProxy } from "@blockrun/clawrouter";
+import { startProxy } from "@DOS/DOSRouter";
 
-const proxy = await startProxy({ walletKey: process.env.BLOCKRUN_WALLET_KEY! });
+const proxy = await startProxy({ walletKey: process.env.DOSROUTER_WALLET_KEY! });
 
 const response = await fetch(`${proxy.baseUrl}/v1/images/generations`, {
   method: "POST",
@@ -290,7 +290,7 @@ curl -X POST http://localhost:8402/v1/images/image2image \
 ### TypeScript / Node.js
 
 ```typescript
-// ClawRouter reads the file for you — no base64 encoding needed
+// DOSRouter reads the file for you — no base64 encoding needed
 const response = await fetch("http://localhost:8402/v1/images/image2image", {
   method: "POST",
   headers: { "Content-Type": "application/json" },
@@ -329,7 +329,7 @@ print(result["data"][0]["url"])
 
 ## In-Chat Commands
 
-When using ClawRouter with OpenClaw, generate and edit images directly from any conversation:
+When using DOSRouter with DOSRouter, generate and edit images directly from any conversation:
 
 ### `/imagegen` — Generate images
 
@@ -373,8 +373,8 @@ When using ClawRouter with OpenClaw, generate and edit images directly from any 
 
 ## Notes
 
-- **Local image caching** — All images (generated and edited) are cached locally at `~/.openclaw/blockrun/images/` and served via `http://localhost:8402/images/`. Both base64 data URIs and HTTP URLs from upstream are downloaded and replaced with localhost URLs.
+- **Local image caching** — All images (generated and edited) are cached locally at `~/.dosrouter/dos/images/` and served via `http://localhost:8402/images/`. Both base64 data URIs and HTTP URLs from upstream are downloaded and replaced with localhost URLs.
 - **Payment** — Each image costs the listed price in USDC, deducted from your wallet via x402. Make sure your wallet is funded before generating or editing.
 - **No DALL-E content policy bypass** — DALL-E 3 and GPT Image 1 still apply OpenAI's content policy. Use `flux` or `nano-banana` for more flexibility with generation.
 - **Size limits** — Requesting a size larger than the model's max will return an error. Check the table above before setting `--size`.
-- **Image editing** — The `/v1/images/image2image` endpoint currently supports `openai/gpt-image-1` (default). The `image` and `mask` fields accept local file paths (`~/photo.png`, `/abs/path.png`), HTTP/HTTPS URLs, or base64 data URIs. ClawRouter handles file reading and URL downloading automatically. Supported formats: PNG, JPG/JPEG, WebP.
+- **Image editing** — The `/v1/images/image2image` endpoint currently supports `openai/gpt-image-1` (default). The `image` and `mask` fields accept local file paths (`~/photo.png`, `/abs/path.png`), HTTP/HTTPS URLs, or base64 data URIs. DOSRouter handles file reading and URL downloading automatically. Supported formats: PNG, JPG/JPEG, WebP.

@@ -88,6 +88,7 @@ func (s *Server) Close() {
 func (s *Server) ListenAndServe() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", s.handleChatCompletions)
+	mux.HandleFunc("/v1/images/generations", s.handleImageGen)
 	mux.HandleFunc("/v1/models", s.handleModels)
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/debug", s.handleDebug)
@@ -276,8 +277,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		req.Messages = normalizeMessagesForThinking(req.Messages)
 	}
 
-	newBody, err := json.Marshal(req)
-	if err != nil {
+	// Validate request can be marshaled (actual marshaling happens per-model in fallback loop)
+	if _, err := json.Marshal(req); err != nil {
 		http.Error(w, "Failed to marshal request", http.StatusInternalServerError)
 		return
 	}
@@ -290,27 +291,97 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-DOSRouter-Savings", fmt.Sprintf("%.0f%%", decision.Savings*100))
 		w.Header().Set("X-DOSRouter-Profile", decision.Profile)
 		w.Header().Set("X-DOSRouter-Reasoning", decision.Reasoning)
+		if decision.CostEstimate > 0 {
+			w.Header().Set("X-DOSRouter-Cost", fmt.Sprintf("%.6f", decision.CostEstimate))
+		}
 	}
 
-	// Forward to upstream with retry
+	// Forward to upstream with retry and structured fallback (upstream v0.12.64)
 	upstreamURL := fmt.Sprintf("%s/v1/chat/completions", s.config.UpstreamBase)
-	makeReq := func() (*http.Request, error) {
-		upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, bytes.NewReader(newBody))
-		if err != nil {
-			return nil, err
-		}
-		upstreamReq.Header.Set("Content-Type", "application/json")
-		if s.config.UpstreamAPIKey != "" {
-			upstreamReq.Header.Set("Authorization", "Bearer "+s.config.UpstreamAPIKey)
-		} else {
-			upstreamReq.Header.Set("Authorization", r.Header.Get("Authorization"))
-		}
-		return upstreamReq, nil
+	authHeader := r.Header.Get("Authorization")
+	if s.config.UpstreamAPIKey != "" {
+		authHeader = "Bearer " + s.config.UpstreamAPIKey
 	}
 
-	resp, err := retry.Do(r.Context(), makeReq, retry.WithClient(s.httpClient))
-	if err != nil {
-		http.Error(w, "Upstream error: "+err.Error(), http.StatusBadGateway)
+	makeReqFor := func(bodyBytes []byte) func() (*http.Request, error) {
+		return func() (*http.Request, error) {
+			upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, bytes.NewReader(bodyBytes))
+			if err != nil {
+				return nil, err
+			}
+			upstreamReq.Header.Set("Content-Type", "application/json")
+			upstreamReq.Header.Set("Authorization", authHeader)
+			return upstreamReq, nil
+		}
+	}
+
+	// Build fallback chain: if smart-routed, try all models in the tier
+	var fallbackChain []string
+	if decision != nil {
+		fallbackChain = router.GetFallbackChain(decision.Tier, decision.TierConfigs)
+	}
+	if len(fallbackChain) == 0 {
+		fallbackChain = []string{resolvedModel}
+	}
+
+	type attemptResult struct {
+		model  string
+		reason string
+	}
+	var attempts []attemptResult
+	var resp *http.Response
+
+	for _, tryModel := range fallbackChain {
+		req.Model = tryModel
+		tryBody, _ := json.Marshal(req)
+		tryResp, tryErr := retry.Do(r.Context(), makeReqFor(tryBody), retry.WithClient(s.httpClient))
+		if tryErr != nil {
+			attempts = append(attempts, attemptResult{model: tryModel, reason: tryErr.Error()})
+			continue
+		}
+		// Provider returned an error status (4xx/5xx except 429 which retry handles)
+		if tryResp.StatusCode >= 400 {
+			errBody, _ := io.ReadAll(tryResp.Body)
+			tryResp.Body.Close()
+			reason := fmt.Sprintf("HTTP %d", tryResp.StatusCode)
+			if len(errBody) > 0 {
+				var errObj struct {
+					Error struct {
+						Message string `json:"message"`
+					} `json:"error"`
+				}
+				if json.Unmarshal(errBody, &errObj) == nil && errObj.Error.Message != "" {
+					reason = errObj.Error.Message
+				}
+			}
+			attempts = append(attempts, attemptResult{model: tryModel, reason: reason})
+			continue
+		}
+		resp = tryResp
+		resolvedModel = tryModel
+		if tryModel != fallbackChain[0] {
+			w.Header().Set("X-DOSRouter-Fallback", tryModel)
+			w.Header().Set("X-DOSRouter-Model", tryModel)
+		}
+		break
+	}
+
+	if resp == nil {
+		// All models failed - structured error
+		parts := make([]string, len(attempts))
+		for i, a := range attempts {
+			parts[i] = fmt.Sprintf("%s (%s)", a.model, a.reason)
+		}
+		errMsg := fmt.Sprintf("All %d models failed. Tried: %s", len(attempts), strings.Join(parts, ", "))
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadGateway)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"error": map[string]interface{}{
+				"message": errMsg,
+				"type":    "all_models_failed",
+				"models":  len(attempts),
+			},
+		})
 		s.logRequest(resolvedModel, decision, startTime, "error")
 		return
 	}
@@ -337,17 +408,26 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		var streamInputTok, streamOutputTok int
 		for scanner.Scan() {
 			line := scanner.Text()
-			// Parse usage from streaming chunks (some providers send usage in final chunk)
+			// Parse and rewrite streaming chunks: inject model name + track usage
 			if strings.HasPrefix(line, "data: ") && line != "data: [DONE]" {
-				var chunk struct {
-					Usage *struct {
-						PromptTokens     int `json:"prompt_tokens"`
-						CompletionTokens int `json:"completion_tokens"`
-					} `json:"usage"`
-				}
-				if json.Unmarshal([]byte(line[6:]), &chunk) == nil && chunk.Usage != nil {
-					streamInputTok = chunk.Usage.PromptTokens
-					streamOutputTok = chunk.Usage.CompletionTokens
+				var chunk map[string]interface{}
+				if json.Unmarshal([]byte(line[6:]), &chunk) == nil {
+					// Track usage tokens
+					if u, ok := chunk["usage"].(map[string]interface{}); ok {
+						if pt, ok := u["prompt_tokens"].(float64); ok {
+							streamInputTok = int(pt)
+						}
+						if ct, ok := u["completion_tokens"].(float64); ok {
+							streamOutputTok = int(ct)
+						}
+					}
+					// Inject actual routed model into every chunk (upstream v0.12.64)
+					if decision != nil {
+						chunk["model"] = resolvedModel
+						if b, err := json.Marshal(chunk); err == nil {
+							line = "data: " + string(b)
+						}
+					}
 				}
 			}
 			// Intercept [DONE] to inject cost usage chunk
@@ -385,7 +465,6 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		// If the response has empty content, no tool_calls, and finish_reason "stop",
 		// treat as degraded and try the next model in the fallback chain.
 		if resp.StatusCode == http.StatusOK && decision != nil && isEmptyTurn(respBody) {
-			fallbackChain := router.GetFallbackChain(decision.Tier, decision.TierConfigs)
 			nextModel := ""
 			for i, m := range fallbackChain {
 				if m == resolvedModel && i+1 < len(fallbackChain) {
@@ -394,31 +473,17 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				}
 			}
 			if nextModel != "" {
-				log.Printf("degraded response: empty turn from %s, falling back", resolvedModel)
+				log.Printf("degraded response: empty turn from %s, falling back to %s", resolvedModel, nextModel)
 				resolvedModel = nextModel
 				req.Model = nextModel
-				newBody, _ = json.Marshal(req)
+				fbBody, _ := json.Marshal(req)
 
 				// Re-pin session to fallback model
 				if sessionID != "" {
 					s.sessions.SetSession(sessionID, nextModel, decision.Tier, userExplicit)
 				}
 
-				// Retry with fallback model
-				makeReq = func() (*http.Request, error) {
-					upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, bytes.NewReader(newBody))
-					if err != nil {
-						return nil, err
-					}
-					upstreamReq.Header.Set("Content-Type", "application/json")
-					if s.config.UpstreamAPIKey != "" {
-						upstreamReq.Header.Set("Authorization", "Bearer "+s.config.UpstreamAPIKey)
-					} else {
-						upstreamReq.Header.Set("Authorization", r.Header.Get("Authorization"))
-					}
-					return upstreamReq, nil
-				}
-				fbResp, fbErr := retry.Do(r.Context(), makeReq, retry.WithClient(s.httpClient))
+				fbResp, fbErr := retry.Do(r.Context(), makeReqFor(fbBody), retry.WithClient(s.httpClient))
 				if fbErr == nil {
 					defer fbResp.Body.Close()
 					respBody, _ = io.ReadAll(fbResp.Body)
@@ -663,6 +728,69 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"scoring":  scoring,
 		"decision": decision,
+	})
+}
+
+// handleImageGen forwards image generation requests to the upstream API.
+// No smart routing - direct passthrough with logging.
+func (s *Server) handleImageGen(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, "Failed to read body", http.StatusBadRequest)
+		return
+	}
+	defer r.Body.Close()
+
+	// Parse model from request
+	var req struct {
+		Model string `json:"model"`
+	}
+	json.Unmarshal(body, &req)
+	if req.Model == "" {
+		req.Model = "dall-e-3"
+	}
+
+	upstreamURL := fmt.Sprintf("%s/v1/images/generations", s.config.UpstreamBase)
+	upstreamReq, err := http.NewRequestWithContext(r.Context(), http.MethodPost, upstreamURL, bytes.NewReader(body))
+	if err != nil {
+		http.Error(w, "Failed to create request", http.StatusInternalServerError)
+		return
+	}
+	upstreamReq.Header.Set("Content-Type", "application/json")
+	if s.config.UpstreamAPIKey != "" {
+		upstreamReq.Header.Set("Authorization", "Bearer "+s.config.UpstreamAPIKey)
+	} else {
+		upstreamReq.Header.Set("Authorization", r.Header.Get("Authorization"))
+	}
+
+	resp, err := s.httpClient.Do(upstreamReq)
+	if err != nil {
+		http.Error(w, "Upstream error: "+err.Error(), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+
+	respBody, _ := io.ReadAll(resp.Body)
+
+	for k, v := range resp.Header {
+		for _, vv := range v {
+			w.Header().Add(k, vv)
+		}
+	}
+	w.Header().Set("X-DOSRouter-Model", req.Model)
+	w.WriteHeader(resp.StatusCode)
+	w.Write(respBody)
+
+	logger.LogUsage(logger.UsageEntry{
+		Timestamp: time.Now().UTC().Format(time.RFC3339),
+		Model:     req.Model,
+		Tier:      "IMAGE",
+		Status:    fmt.Sprintf("%d", resp.StatusCode),
 	})
 }
 

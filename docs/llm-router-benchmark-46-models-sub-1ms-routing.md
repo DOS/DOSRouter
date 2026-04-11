@@ -1,14 +1,14 @@
 # We Benchmarked 39 AI Models Through Our Payment Gateway. Here's What We Found.
 
-_March 16, 2026 | BlockRun Engineering_
+_March 16, 2026 | DOS Engineering_
 
-Last week we ran every model on BlockRun through a real-world latency benchmark — 39 models, same prompts, same payment pipeline, same hardware. No cherry-picked results. No synthetic lab conditions. Just cold, hard numbers from production infrastructure.
+Last week we ran every model on DOS through a real-world latency benchmark — 39 models, same prompts, same payment pipeline, same hardware. No cherry-picked results. No synthetic lab conditions. Just cold, hard numbers from production infrastructure.
 
 The results changed how we route requests.
 
 ## Why We Did This
 
-BlockRun is an x402 micropayment gateway that sits between your AI agent and 39+ LLM providers. Every request flows through our payment verification layer before hitting the model API. That means our latency numbers include everything a real user experiences: payment auth, provider API call, and response delivery.
+DOS is an x402 micropayment gateway that sits between your AI agent and 39+ LLM providers. Every request flows through our payment verification layer before hitting the model API. That means our latency numbers include everything a real user experiences: payment auth, provider API call, and response delivery.
 
 Most benchmarks measure model speed in isolation. We wanted to measure what users actually feel.
 
@@ -16,7 +16,7 @@ Most benchmarks measure model speed in isolation. We wanted to measure what user
 
 We sent 2 coding prompts per model (256 max tokens, non-streaming) and measured end-to-end response time.
 
-### Speed Rankings (End-to-End Latency Through BlockRun)
+### Speed Rankings (End-to-End Latency Through DOS)
 
 | #   | Model                           | Latency | Tok/s | $/1M in | $/1M out |
 | --- | ------------------------------- | ------- | ----- | ------- | -------- |
@@ -86,7 +86,7 @@ OpenAI's "mini" and "nano" variants are faster (2.2-3.2s range) but still 2x slo
 
 We cross-referenced our latency data with quality scores from [Artificial Analysis](https://artificialanalysis.ai/leaderboards/models) (Intelligence Index v4.0):
 
-| Model                  | BlockRun Latency | Intelligence Index | Price Tier  |
+| Model                  | DOS Latency | Intelligence Index | Price Tier  |
 | ---------------------- | ---------------- | ------------------ | ----------- |
 | Gemini 3.1 Pro         | 1,609ms          | 57                 | $1.25/$10   |
 | GPT-5.4                | 6,213ms          | 57                 | $2.50/$15   |
@@ -116,22 +116,22 @@ The fix: we now weight **quality and user retention** alongside speed in our rou
 
 **If you need peak intelligence:** Gemini 3.1 Pro (IQ 57, 1.6s) gives you the same quality as GPT-5.4 (IQ 57, 6.2s) at one-quarter the latency and lower cost. Claude Opus 4.6 (IQ 53, 2.1s) is the best option if you need Anthropic-family capabilities.
 
-**If you want it all handled for you:** That's what BlockRun's smart router does. Set your profile to `auto` and we'll pick the right model based on task complexity, balancing speed, quality, and cost automatically.
+**If you want it all handled for you:** That's what DOS's smart router does. Set your profile to `auto` and we'll pick the right model based on task complexity, balancing speed, quality, and cost automatically.
 
 ## Methodology
 
 - **Date:** March 16, 2026
-- **Setup:** BlockRun ClawRouter v0.12.47 proxy on localhost, connected to BlockRun's x402 payment gateway on Base (EVM)
+- **Setup:** DOS DOSRouter v0.12.47 proxy on localhost, connected to DOS's x402 payment gateway on Base (EVM)
 - **Prompts:** 3 Python coding tasks (IPv4 validation, LCS algorithm, LRU cache), 2 requests per model
 - **Config:** 256 max tokens, non-streaming, temperature 0.7
 - **Latency:** End-to-end wall clock time including x402 payment verification (~50-100ms overhead)
 - **Intelligence scores:** [Artificial Analysis Intelligence Index v4.0](https://artificialanalysis.ai/leaderboards/models) (March 2026)
 
-Raw benchmark data: [benchmark-results.json](https://github.com/BlockRunAI/ClawRouter/blob/main/benchmark-results.json)
+Raw benchmark data: [benchmark-results.json](https://github.com/DOSAI/DOSRouter/blob/main/benchmark-results.json)
 
 ---
 
-_BlockRun is the x402 micropayment gateway for AI. One wallet, 39+ models, pay-per-request with USDC. [Get started](https://blockrun.ai)_
+_DOS is the x402 micropayment gateway for AI. One wallet, 39+ models, pay-per-request with USDC. [Get started](https://dos.ai)_
 
 ---
 
@@ -139,7 +139,7 @@ _BlockRun is the x402 micropayment gateway for AI. One wallet, 39+ models, pay-p
 
 **Thread: We benchmarked 39 AI models through our payment gateway. The speed differences are wild. (thread)**
 
-**1/** We ran every model on @BlockRunAI through a real-world latency benchmark. 39 models, same prompts, full payment pipeline included.
+**1/** We ran every model on @DOSAI through a real-world latency benchmark. 39 models, same prompts, full payment pipeline included.
 
 The fastest model (Grok 4 Fast) was 7x faster than the slowest (GPT-5.3 Codex). Here's the full breakdown:
 
@@ -168,7 +168,7 @@ Lesson: you need to balance speed, quality, AND cost.
 - Best reasoning: Claude Opus 4.6 (IQ 53, 2.1s, $15/M)
 - Best speed/quality: Kimi K2.5 (IQ 47, 1.6s, $0.60/M)
 
-**6/** This is why we built smart routing into BlockRun.
+**6/** This is why we built smart routing into DOS.
 
 Set `model: "auto"` and we pick the right model based on task complexity. Simple tasks get Gemini Flash. Complex reasoning gets Claude/GPT flagships.
 
@@ -178,4 +178,4 @@ One wallet. 39 models. The router handles the rest.
 
 All 39 models benchmarked through real x402 micropayment infrastructure. No synthetic lab conditions.
 
-Build with @BlockRunAI: blockrun.ai
+Build with @DOSAI: dos.ai

@@ -2,7 +2,7 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Replace ClawRouter's binary `isProviderError` with per-category error classification so that 401 auth failures never pollute the 429 rate-limit cooldown map, each provider's error state is isolated, and `/stats` exposes per-provider error breakdowns.
+**Goal:** Replace DOSRouter's binary `isProviderError` with per-category error classification so that 401 auth failures never pollute the 429 rate-limit cooldown map, each provider's error state is isolated, and `/stats` exposes per-provider error breakdowns.
 
 **Architecture:** Add `ErrorCategory` type + `categorizeError()` function in `proxy.ts`. Extend `ModelRequestResult` to carry the category. Replace the flat `rateLimitedModels`-only tracking with a dual-map (rate-limit + overloaded) plus an in-memory `perProviderErrors` counter. The fallback loop switches on category instead of raw status code. `/stats` merges the runtime map into its JSON response.
 
@@ -71,7 +71,7 @@ export function categorizeError(status: number, body: string): ErrorCategory | n
 **Step 3: Verify it compiles**
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter && bun run build 2>&1 | tail -5
+cd /Users/vickyfu/Documents/dos-web/DOSRouter && bun run build 2>&1 | tail -5
 ```
 
 Expected: no TypeScript errors.
@@ -147,7 +147,7 @@ After the existing `markRateLimited()` function (line ~357), add:
  */
 function markOverloaded(modelId: string): void {
   overloadedModels.set(modelId, Date.now());
-  console.log(`[ClawRouter] Model ${modelId} overloaded, will deprioritize for 15s`);
+  console.log(`[DOSRouter] Model ${modelId} overloaded, will deprioritize for 15s`);
 }
 
 /** Check if a model is in its overload cooldown period. */
@@ -207,7 +207,7 @@ function prioritizeNonRateLimited(models: string[]): string[] {
 **Step 5: Build to verify**
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter && bun run build 2>&1 | tail -5
+cd /Users/vickyfu/Documents/dos-web/DOSRouter && bun run build 2>&1 | tail -5
 ```
 
 **Step 6: Commit**
@@ -286,7 +286,7 @@ Note: This removes the call to the now-redundant `isProviderError()` function. T
 **Step 3: Build to verify**
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter && bun run build 2>&1 | tail -5
+cd /Users/vickyfu/Documents/dos-web/DOSRouter && bun run build 2>&1 | tail -5
 ```
 
 **Step 4: Commit**
@@ -343,10 +343,10 @@ if (errorCat === "rate_limited") {
     if (parsed.update_available) {
       console.log("");
       console.log(
-        `\x1b[33m⬆️  ClawRouter ${parsed.update_available} available (you have ${VERSION})\x1b[0m`,
+        `\x1b[33m⬆️  DOSRouter ${parsed.update_available} available (you have ${VERSION})\x1b[0m`,
       );
       console.log(
-        `   Run: \x1b[36mcurl -fsSL ${parsed.update_url || "https://blockrun.ai/ClawRouter-update"} | bash\x1b[0m`,
+        `   Run: \x1b[36mcurl -fsSL ${parsed.update_url || "https://dos.ai/DOSRouter-update"} | bash\x1b[0m`,
       );
       console.log("");
     }
@@ -357,7 +357,7 @@ if (errorCat === "rate_limited") {
   markOverloaded(tryModel);
 } else if (errorCat === "auth_failure" || errorCat === "quota_exceeded") {
   console.log(
-    `[ClawRouter] 🔑 ${errorCat === "auth_failure" ? "Auth failure" : "Quota exceeded"} for ${tryModel} — check provider config`,
+    `[DOSRouter] 🔑 ${errorCat === "auth_failure" ? "Auth failure" : "Quota exceeded"} for ${tryModel} — check provider config`,
   );
 }
 ```
@@ -365,7 +365,7 @@ if (errorCat === "rate_limited") {
 **Step 3: Build to verify**
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter && bun run build 2>&1 | tail -5
+cd /Users/vickyfu/Documents/dos-web/DOSRouter && bun run build 2>&1 | tail -5
 ```
 
 **Step 4: Commit**
@@ -448,7 +448,7 @@ This adds a `providerErrors` field to the JSON response, e.g.:
 **Step 3: Build to verify**
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter && bun run build 2>&1 | tail -5
+cd /Users/vickyfu/Documents/dos-web/DOSRouter && bun run build 2>&1 | tail -5
 ```
 
 **Step 4: Commit**
@@ -545,7 +545,7 @@ describe("categorizeError", () => {
 **Step 2: Run tests**
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter && bun test src/error-classification.test.ts
+cd /Users/vickyfu/Documents/dos-web/DOSRouter && bun test src/error-classification.test.ts
 ```
 
 Expected: all tests pass.
@@ -574,7 +574,7 @@ Add changelog entry comment in the commit message.
 **Step 2: Run full test suite**
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter && bun test 2>&1 | tail -20
+cd /Users/vickyfu/Documents/dos-web/DOSRouter && bun test 2>&1 | tail -20
 ```
 
 Expected: all existing tests still pass (new tests pass from Task 6).
@@ -582,7 +582,7 @@ Expected: all existing tests still pass (new tests pass from Task 6).
 **Step 3: Build final**
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter && bun run build 2>&1
+cd /Users/vickyfu/Documents/dos-web/DOSRouter && bun run build 2>&1
 ```
 
 **Step 4: Final commit**

@@ -1,5 +1,5 @@
 // Package logger provides append-only JSONL usage logging to daily files
-// under ~/.openclaw/blockrun/logs/.
+// under ~/.dosrouter/logs/.
 package logger
 
 import (
@@ -17,7 +17,7 @@ func init() {
 	if err != nil {
 		home = "."
 	}
-	logDir = filepath.Join(home, ".openclaw", "blockrun", "logs")
+	logDir = filepath.Join(home, ".dosrouter", "logs")
 }
 
 var dirOnce sync.Once

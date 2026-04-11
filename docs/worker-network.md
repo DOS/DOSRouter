@@ -1,10 +1,10 @@
-# BlockRun Worker Network
+# DOS Worker Network
 
 > **For Claude implementing this:** Use `superpowers:executing-plans` to implement the tasks section task-by-task.
 
-**Goal:** Let ClawRouter users opt in as worker nodes — poll tasks, execute HTTP checks, earn USDC via x402 micropayments.
+**Goal:** Let DOSRouter users opt in as worker nodes — poll tasks, execute HTTP checks, earn USDC via x402 micropayments.
 
-**Architecture:** ClawRouter polls every 30s, signs results with existing wallet key. BlockRun verifies signature, writes to DB, triggers batched x402 payout at $0.01 threshold, simultaneously writes calldata log tx to Base for immutable audit trail.
+**Architecture:** DOSRouter polls every 30s, signs results with existing wallet key. DOS verifies signature, writes to DB, triggers batched x402 payout at $0.01 threshold, simultaneously writes calldata log tx to Base for immutable audit trail.
 
 **Tech Stack:** viem (signing + calldata tx), x402 reversed payTo (worker payout), DB (credits ledger), GCS (result logs + reputation source), Base calldata (audit trail)
 
@@ -12,9 +12,9 @@
 
 ## Overview
 
-ClawRouter Worker Mode transforms any ClawRouter installation into a node in a decentralized uptime monitoring network. Workers earn USDC by executing HTTP health checks assigned by BlockRun. Buyers purchase monitoring with tamper-proof, multi-node uptime proof — a stronger signal than self-reported metrics.
+DOSRouter Worker Mode transforms any DOSRouter installation into a node in a decentralized uptime monitoring network. Workers earn USDC by executing HTTP health checks assigned by DOS. Buyers purchase monitoring with tamper-proof, multi-node uptime proof — a stronger signal than self-reported metrics.
 
-**Current supply-side advantage:** ~1,000 paying ClawRouter users already have wallets and geographic distribution. Turning them into workers requires zero additional setup.
+**Current supply-side advantage:** ~1,000 paying DOSRouter users already have wallets and geographic distribution. Turning them into workers requires zero additional setup.
 
 ---
 
@@ -47,17 +47,17 @@ Any B2B company that sells to enterprises or operates under financial regulation
 
 ### For Buyers
 
-| Tier            | SLA                                            | Price         | BlockRun margin |
+| Tier            | SLA                                            | Price         | DOS margin |
 | --------------- | ---------------------------------------------- | ------------- | --------------- |
 | **Best Effort** | Checks run when workers online (~90% coverage) | $0.0003/check | 67%             |
-| **Standard**    | ≥1 check/min guaranteed (BlockRun fills gaps)  | $0.001/check  | 90%             |
+| **Standard**    | ≥1 check/min guaranteed (DOS fills gaps)  | $0.001/check  | 90%             |
 | **Premium**     | 30s guaranteed + multi-region report           | $0.003/check  | 97%             |
 
 Monthly equivalent per endpoint (30s Standard):
 
 - 2,880 checks/day × 30 × $0.001 = **$86.40/month**
 - Worker cost: 2,880 × $0.0001 = **$8.64/month**
-- **BlockRun margin: $77.76/endpoint/month**
+- **DOS margin: $77.76/endpoint/month**
 
 ### For Workers
 
@@ -69,7 +69,7 @@ Multiplied by reputation tier (see below). Payouts trigger at **$0.01 threshold*
 
 ## Reputation Flywheel
 
-BlockRun already has all payment data from LLM inference. **No third-party needed.**
+DOS already has all payment data from LLM inference. **No third-party needed.**
 
 ```
 用户付钱买 LLM → 积累 reputation
@@ -78,7 +78,7 @@ BlockRun already has all payment data from LLM inference. **No third-party neede
 → 循环
 ```
 
-### Reputation Tiers (based on lifetime USDC paid to BlockRun)
+### Reputation Tiers (based on lifetime USDC paid to DOS)
 
 | Tier         | Condition   | Worker reward         | Task priority                |
 | ------------ | ----------- | --------------------- | ---------------------------- |
@@ -87,13 +87,13 @@ BlockRun already has all payment data from LLM inference. **No third-party neede
 | **Gold**     | ≥ $50 paid  | $0.00015/check (1.5x) | High-value tasks             |
 | **Platinum** | ≥ $200 paid | $0.0002/check (2x)    | Enterprise tasks, first pick |
 
-Reputation is computed from BlockRun's own GCS logs (LLM call history per wallet), refreshed daily. Cached in DB per wallet — not queried on every request.
+Reputation is computed from DOS's own GCS logs (LLM call history per wallet), refreshed daily. Cached in DB per wallet — not queried on every request.
 
 ---
 
 ## Worker Availability Reality
 
-ClawRouter users are developers on their own machines, not 24/7 server operators.
+DOSRouter users are developers on their own machines, not 24/7 server operators.
 
 **Estimated concurrent online workers:**
 
@@ -116,7 +116,7 @@ task_br_health sent to:
 
 **Task queue logic:** Return tasks where `now - lastSuccessfulCheck > targetInterval`. Workers naturally fill gaps. No orphaned assignments.
 
-**Standard/Premium tiers:** BlockRun runs always-on backup workers to guarantee baseline coverage.
+**Standard/Premium tiers:** DOS runs always-on backup workers to guarantee baseline coverage.
 
 ---
 
@@ -126,24 +126,24 @@ task_br_health sent to:
 
 ```
 Buyer wallet
-  ──$0.001/check──▶ BlockRun (x402, payTo = BlockRun address)
+  ──$0.001/check──▶ DOS (x402, payTo = DOS address)
                      ↓
                     DB: worker_credits[address] += rewardMicros
                      ↓ (when credits ≥ $0.01)
-                    BlockRun treasury
+                    DOS treasury
                       ──$0.01──▶ Worker wallet
                                   x402 (payTo = worker address)
                                   + 0 ETH calldata log tx on Base
                      ↓
-                    BlockRun keeps the spread ($0.009 per $0.01 payout)
+                    DOS keeps the spread ($0.009 per $0.01 payout)
 ```
 
 ### Why x402 Both Directions
 
 x402 is EIP-3009 TransferWithAuthorization. The `payTo` field is just an address — change it to the worker's wallet:
 
-- **Buyer → BlockRun:** `from: buyer, to: blockrunWallet`
-- **BlockRun → Worker:** `from: treasury, to: workerWallet`
+- **Buyer → DOS:** `from: buyer, to: dosWallet`
+- **DOS → Worker:** `from: treasury, to: workerWallet`
 
 Same CDP facilitator `/settle` endpoint. No new payment infrastructure.
 
@@ -221,7 +221,7 @@ CREATE TABLE wallet_reputation (
 A separate 0 ETH transaction broadcast alongside the USDC transfer:
 
 ```typescript
-// to: BLOCKRUN_LOG_ADDRESS (BlockRun's own address)
+// to: DOSROUTER_LOG_ADDRESS (DOS's own address)
 // value: 0 ETH
 // calldata: encoded payout receipt
 {
@@ -237,13 +237,13 @@ A separate 0 ETH transaction broadcast alongside the USDC transfer:
 }
 ```
 
-**Independent verification:** Anyone can scan Base for txs to `BLOCKRUN_LOG_ADDRESS`, decode calldata, and verify all worker payouts without trusting BlockRun's DB.
+**Independent verification:** Anyone can scan Base for txs to `DOSROUTER_LOG_ADDRESS`, decode calldata, and verify all worker payouts without trusting DOS's DB.
 
 ---
 
 ## Trust & Verification Model
 
-Workers are **existing paying ClawRouter users**. The work is trivially cheap:
+Workers are **existing paying DOSRouter users**. The work is trivially cheap:
 
 ```javascript
 const res = await fetch(url, { signal: AbortSignal.timeout(10000) });
@@ -256,7 +256,7 @@ Reward either way: $0.0001.
 
 **No rational incentive to cheat.** Simple EIP-191 signature proves identity. That's sufficient.
 
-Future (V2): nonce injection for BlockRun-owned endpoints, spot-check verification for third-party.
+Future (V2): nonce injection for DOS-owned endpoints, spot-check verification for third-party.
 
 ---
 
@@ -270,8 +270,8 @@ Future (V2): nonce injection for BlockRun-owned endpoints, spot-check verificati
 | Verify work authenticity?  | Trust-based (paying users, no incentive to cheat) |
 | Track credits per worker?  | DB (primary) + Base calldata (audit)              |
 | Pay per check on-chain?    | No — batch at $0.01 threshold, 1% gas overhead    |
-| Calldata mechanism?        | Separate 0 ETH tx to BLOCKRUN_LOG_ADDRESS         |
-| Reputation source?         | BlockRun's own GCS logs, no third-party           |
+| Calldata mechanism?        | Separate 0 ETH tx to DOSROUTER_LOG_ADDRESS         |
+| Reputation source?         | DOS's own GCS logs, no third-party           |
 | DB choice?                 | TBD — any Postgres-compatible works               |
 
 ---
@@ -280,8 +280,8 @@ Future (V2): nonce injection for BlockRun-owned endpoints, spot-check verificati
 
 ### Phase 1: Supply Side (Month 1–2)
 
-- Ship `CLAWROUTER_WORKER=1` to 1,000 existing users
-- Pilot: 3 hardcoded tasks monitoring BlockRun's own endpoints
+- Ship `DOSROUTER_WORKER=1` to 1,000 existing users
+- Pilot: 3 hardcoded tasks monitoring DOS's own endpoints
 - Target: 50+ active workers, end-to-end payment verified on-chain
 
 ### Phase 2: First Buyers (Month 2–3)
@@ -293,7 +293,7 @@ Future (V2): nonce injection for BlockRun-owned endpoints, spot-check verificati
 
 ### Phase 3: Scale (Month 3–6)
 
-- Standard/Premium tiers with BlockRun-backed SLA
+- Standard/Premium tiers with DOS-backed SLA
 - "State of Web3 Uptime" report from aggregated data
 - Coinbase/Base ecosystem partnership
 - Target: $15,000 MRR
@@ -329,7 +329,7 @@ Future (V2): nonce injection for BlockRun-owned endpoints, spot-check verificati
 
 ## Files to Touch
 
-### ClawRouter
+### DOSRouter
 
 | File                   | Action |
 | ---------------------- | ------ |
@@ -338,7 +338,7 @@ Future (V2): nonce injection for BlockRun-owned endpoints, spot-check verificati
 | `src/worker/index.ts`  | CREATE |
 | `src/index.ts`         | MODIFY |
 
-### BlockRun
+### DOS
 
 | File                                     | Action |
 | ---------------------------------------- | ------ |
@@ -351,25 +351,25 @@ Future (V2): nonce injection for BlockRun-owned endpoints, spot-check verificati
 
 ### Environment Variables
 
-**ClawRouter `.env` / shell:**
+**DOSRouter `.env` / shell:**
 
 ```bash
-CLAWROUTER_WORKER=1
+DOSROUTER_WORKER=1
 WORKER_REGION=US-West            # optional
-BLOCKRUN_API_BASE=https://blockrun.ai/api   # override for local dev
+DOSROUTER_API_BASE=https://dos.ai/api   # override for local dev
 ```
 
-**BlockRun `.env.local`:**
+**DOS `.env.local`:**
 
 ```bash
 WORKER_PAYOUT_WALLET_KEY=0x...   # treasury signing key — never commit
-BLOCKRUN_LOG_ADDRESS=0x...       # BlockRun's own address for calldata logs
+DOSROUTER_LOG_ADDRESS=0x...       # DOS's own address for calldata logs
 DATABASE_URL=postgres://...      # your DB
 ```
 
 ---
 
-## Task 1: ClawRouter — Types
+## Task 1: DOSRouter — Types
 
 **File:** `src/worker/types.ts`
 
@@ -413,7 +413,7 @@ export interface WorkerStatus {
 
 ---
 
-## Task 2: ClawRouter — HTTP Check Executor
+## Task 2: DOSRouter — HTTP Check Executor
 
 **File:** `src/worker/checks.ts`
 
@@ -432,7 +432,7 @@ export async function executeHttpCheck(task: WorkerTask): Promise<{
       method: "GET",
       signal: AbortSignal.timeout(task.timeoutMs),
       redirect: "follow",
-      headers: { "User-Agent": "BlockRun-Worker/1.0" },
+      headers: { "User-Agent": "DOS-Worker/1.0" },
     });
     return {
       success: res.status === task.expectedStatus,
@@ -478,7 +478,7 @@ export function buildSignableMessage(params: {
 
 ---
 
-## Task 3: ClawRouter — WorkerNode Class
+## Task 3: DOSRouter — WorkerNode Class
 
 **File:** `src/worker/index.ts`
 
@@ -487,7 +487,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import type { WorkerTask, WorkerResult, WorkerStatus } from "./types.js";
 import { executeHttpCheck, buildSignableMessage } from "./checks.js";
 
-const BLOCKRUN_API = process.env.BLOCKRUN_API_BASE ?? "https://blockrun.ai/api";
+const DOSROUTER_API = process.env.DOSROUTER_API_BASE ?? "https://dos.ai/api";
 const POLL_INTERVAL_MS = 30_000;
 const MAX_CONCURRENT = 10;
 const REGION = process.env.WORKER_REGION ?? "unknown";
@@ -499,7 +499,7 @@ export class WorkerNode {
   private busy = false;
   private status: WorkerStatus;
 
-  constructor(walletKey: string, walletAddress: string, apiBase = BLOCKRUN_API) {
+  constructor(walletKey: string, walletAddress: string, apiBase = DOSROUTER_API) {
     this.privateKey = walletKey as `0x${string}`;
     this.address = walletAddress;
     this.apiBase = apiBase;
@@ -542,7 +542,7 @@ export class WorkerNode {
     const url = `${this.apiBase}/v1/worker/tasks?address=${this.address}&region=${REGION}`;
     const res = await fetch(url, {
       signal: AbortSignal.timeout(10_000),
-      headers: { "User-Agent": "BlockRun-Worker/1.0" },
+      headers: { "User-Agent": "DOS-Worker/1.0" },
     });
     if (!res.ok) throw new Error(`tasks endpoint ${res.status}`);
     return res.json() as Promise<WorkerTask[]>;
@@ -576,7 +576,7 @@ export class WorkerNode {
     try {
       const res = await fetch(`${this.apiBase}/v1/worker/results`, {
         method: "POST",
-        headers: { "Content-Type": "application/json", "User-Agent": "BlockRun-Worker/1.0" },
+        headers: { "Content-Type": "application/json", "User-Agent": "DOS-Worker/1.0" },
         body: JSON.stringify(results),
         signal: AbortSignal.timeout(15_000),
       });
@@ -602,7 +602,7 @@ export class WorkerNode {
 
 ---
 
-## Task 4: ClawRouter — Wire Worker Mode
+## Task 4: DOSRouter — Wire Worker Mode
 
 **File:** `src/index.ts` — modify `startProxyInBackground()`.
 
@@ -616,7 +616,7 @@ activeProxyHandle = proxy;
 Add immediately after:
 
 ```typescript
-const workerMode = process.env.CLAWROUTER_WORKER === "1" || process.argv.includes("--worker");
+const workerMode = process.env.DOSROUTER_WORKER === "1" || process.argv.includes("--worker");
 
 if (workerMode) {
   const { WorkerNode } = await import("./worker/index.js");
@@ -630,11 +630,11 @@ if (workerMode) {
 
 1. Edit `src/index.ts`
 2. `npx tsc --noEmit`
-3. `git add src/index.ts && git commit -m "feat(worker): activate WorkerNode on CLAWROUTER_WORKER=1"`
+3. `git add src/index.ts && git commit -m "feat(worker): activate WorkerNode on DOSROUTER_WORKER=1"`
 
 ---
 
-## Task 5: BlockRun — DB Schema
+## Task 5: DOS — DB Schema
 
 Run this migration against your DB (Postgres-compatible):
 
@@ -694,7 +694,7 @@ CREATE TABLE wallet_reputation (
 
 ---
 
-## Task 6: BlockRun — Task Registry
+## Task 6: DOS — Task Registry
 
 **File:** `src/lib/worker-tasks.ts`
 
@@ -713,7 +713,7 @@ export const PILOT_TASKS: WorkerTask[] = [
   {
     id: "task_br_health",
     type: "http_check",
-    url: "https://blockrun.ai/api/health",
+    url: "https://dos.ai/api/health",
     expectedStatus: 200,
     timeoutMs: 10_000,
     rewardMicros: 100,
@@ -721,7 +721,7 @@ export const PILOT_TASKS: WorkerTask[] = [
   {
     id: "task_br_models",
     type: "http_check",
-    url: "https://blockrun.ai/api/v1/models",
+    url: "https://dos.ai/api/v1/models",
     expectedStatus: 200,
     timeoutMs: 10_000,
     rewardMicros: 100,
@@ -780,7 +780,7 @@ export function getTaskById(taskId: string): WorkerTask | undefined {
 
 ---
 
-## Task 7: BlockRun — Credit Ledger
+## Task 7: DOS — Credit Ledger
 
 **File:** `src/lib/worker-credits.ts`
 
@@ -856,7 +856,7 @@ export async function getPendingMicros(workerAddress: string): Promise<number> {
 
 ---
 
-## Task 8: BlockRun — Reputation Module
+## Task 8: DOS — Reputation Module
 
 **File:** `src/lib/worker-reputation.ts`
 
@@ -926,9 +926,9 @@ export async function getReputation(workerAddress: string): Promise<{
 }
 
 // Aggregate total USDC paid by this wallet from GCS LLM call logs
-// This reads BlockRun's own data — no third-party reputation service needed
+// This reads DOS's own data — no third-party reputation service needed
 async function computeTotalPaidFromGCS(walletAddress: string): Promise<number> {
-  // TODO (V2): read gs://blockrun-prod-2026-logs/llm-calls/YYYY-MM-DD.jsonl
+  // TODO (V2): read gs://dos-prod-2026-logs/llm-calls/YYYY-MM-DD.jsonl
   // Filter by wallet, sum cost field
   // Pilot: return 0 (all workers start at Bronze)
   return 0;
@@ -943,7 +943,7 @@ async function computeTotalPaidFromGCS(walletAddress: string): Promise<number> {
 
 ---
 
-## Task 9: BlockRun — Payout Module
+## Task 9: DOS — Payout Module
 
 **File:** `src/lib/worker-payouts.ts`
 
@@ -984,7 +984,7 @@ export async function tryPayout(
   );
   const payoutId = payoutResult.rows[0].id;
 
-  // 2. Sign TransferWithAuthorization: BlockRun treasury → worker
+  // 2. Sign TransferWithAuthorization: DOS treasury → worker
   const validAfter = BigInt(0);
   const validBefore = BigInt(Math.floor(Date.now() / 1000) + 3600);
   const nonceBytes = crypto.getRandomValues(new Uint8Array(32));
@@ -1096,7 +1096,7 @@ async function writeCalldataLog(params: {
   payoutKey: string;
   networkConfig: ReturnType<typeof getCurrentNetworkConfig>;
 }): Promise<string | undefined> {
-  const logAddress = process.env.BLOCKRUN_LOG_ADDRESS as `0x${string}` | undefined;
+  const logAddress = process.env.DOSROUTER_LOG_ADDRESS as `0x${string}` | undefined;
   if (!logAddress) return undefined;
 
   try {
@@ -1140,7 +1140,7 @@ async function writeCalldataLog(params: {
 
 ---
 
-## Task 10: BlockRun — GET /api/v1/worker/tasks
+## Task 10: DOS — GET /api/v1/worker/tasks
 
 **File:** `src/app/api/v1/worker/tasks/route.ts`
 
@@ -1178,7 +1178,7 @@ export async function GET(request: NextRequest) {
 
 ---
 
-## Task 11: BlockRun — POST /api/v1/worker/results
+## Task 11: DOS — POST /api/v1/worker/results
 
 **File:** `src/app/api/v1/worker/results/route.ts`
 
@@ -1309,17 +1309,17 @@ export async function POST(request: NextRequest) {
 ## End-to-End Test
 
 ```bash
-# 1. Start BlockRun locally
-cd /Users/vickyfu/Documents/blockrun-web/blockrun
+# 1. Start DOS locally
+cd /Users/vickyfu/Documents/dos-web/dos
 pnpm dev
 
 # 2. Verify tasks endpoint
 curl "http://localhost:3000/api/v1/worker/tasks?address=0x0000000000000000000000000000000000000001"
 # → JSON array with 3 tasks
 
-# 3. Start ClawRouter in worker mode (pointed at localhost)
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter
-CLAWROUTER_WORKER=1 BLOCKRUN_API_BASE=http://localhost:3000/api npx openclaw gateway start
+# 3. Start DOSRouter in worker mode (pointed at localhost)
+cd /Users/vickyfu/Documents/dos-web/DOSRouter
+DOSROUTER_WORKER=1 DOSROUTER_API_BASE=http://localhost:3000/api npx dosrouter gateway start
 
 # 4. Watch for logs:
 # [Worker] Starting — 0x... region=unknown
@@ -1328,5 +1328,5 @@ CLAWROUTER_WORKER=1 BLOCKRUN_API_BASE=http://localhost:3000/api npx openclaw gat
 
 # 5. Check DB: worker_results and worker_credits tables populated
 # 6. At $0.01 threshold (~100 checks): worker_payouts row created, USDC transferred
-# 7. Check Base explorer: calldata log tx visible on BLOCKRUN_LOG_ADDRESS
+# 7. Check Base explorer: calldata log tx visible on DOSROUTER_LOG_ADDRESS
 ```

@@ -1,6 +1,6 @@
 # Architecture
 
-Technical deep-dive into ClawRouter's internals.
+Technical deep-dive into DOSRouter's internals. DOSRouter is a Go port of [ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript).
 
 ## Table of Contents
 
@@ -17,44 +17,34 @@ Technical deep-dive into ClawRouter's internals.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                     OpenClaw / Your App                     │
+│                      Your Application                       │
 │                   (OpenAI-compatible client)                │
 └─────────────────────────────────────────────────────────────┘
                               │
                               ▼
 ┌─────────────────────────────────────────────────────────────┐
-│                 ClawRouter Proxy (localhost)                │
+│                DOSRouter Proxy (localhost)                  │
 │  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐   │
 │  │   Dedup     │→ │   Router    │→ │   x402 Payment    │   │
-│  │   Cache     │  │  (15-dim)   │  │  (USDC on Base    │   │
-│  └─────────────┘  └─────────────┘  │   or Solana)      │   │
-│                                    └───────────────────┘   │
+│  │   Cache     │  │  (15-dim)   │  │  (EVM chains)     │   │
+│  └─────────────┘  └─────────────┘  └───────────────────┘   │
 │  ┌─────────────┐  ┌─────────────┐  ┌───────────────────┐   │
-│  │  Fallback   │  │   Balance   │  │   SSE Heartbeat   │   │
-│  │   Chain     │  │  Monitor    │  │   (streaming)     │   │
-│  │             │  │ (EVM/Solana)│  │                   │   │
+│  │  Fallback   │  │   Balance   │  │   SSE Streaming   │   │
+│  │   Chain     │  │  Monitor    │  │   + Cost Inject   │   │
 │  └─────────────┘  └─────────────┘  └───────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
                               │
-                    ┌─────────┴──────────┐
-                    ▼                    ▼
-┌────────────────────────┐  ┌────────────────────────────────┐
-│  blockrun.ai/api       │  │  sol.blockrun.ai/api           │
-│  (EVM / Base USDC)     │  │  (Solana USDC)                 │
-│  x402 EIP-712 signing  │  │  x402 SVM signing              │
-└────────────────────────┘  └────────────────────────────────┘
-         │                               │
-         └──────────────┬────────────────┘
-                        ▼
-              OpenAI / Anthropic / Google
+                              ▼
+                    Upstream LLM API
+              (OpenAI / Anthropic / Google)
 ```
 
 **Key Principles:**
 
-- **100% local routing** — No API calls for model selection
-- **Client-side only** — Your wallet key never leaves your machine
-- **Non-custodial** — USDC stays in your wallet until spent
-- **Dual-chain** — USDC on Base (EVM) or USDC on Solana; **no SOL token accepted**
+- **100% local routing** - No API calls for model selection (~0.04ms)
+- **Client-side only** - Your wallet key never leaves your machine
+- **Non-custodial** - Funds stay in your wallet until spent
+- **EVM-compatible** - Supports DOS Chain, Base, Avalanche, and any EVM chain
 
 ---
 
@@ -65,7 +55,7 @@ Technical deep-dive into ClawRouter's internals.
 ```
 POST /v1/chat/completions
 {
-  "model": "blockrun/auto",
+  "model": "auto",
   "messages": [{ "role": "user", "content": "What is 2+2?" }],
   "stream": true
 }
@@ -73,162 +63,84 @@ POST /v1/chat/completions
 
 ### 2. Deduplication Check
 
-```typescript
-// SHA-256 hash of request body
-const dedupKey = RequestDeduplicator.hash(body);
+```go
+// SHA-256 hash of canonical request body
+dedupKey := dedup.Hash(body)
 
 // Check completed cache (30s TTL)
-const cached = deduplicator.getCached(dedupKey);
-if (cached) {
-  return cached; // Replay cached response
-}
-
-// Check in-flight requests
-const inflight = deduplicator.getInflight(dedupKey);
-if (inflight) {
-  return await inflight; // Wait for original to complete
+if cached, ok := dedup.GetCached(dedupKey); ok {
+    return cached // Replay cached response
 }
 ```
 
-### 3. Smart Routing (if model is `blockrun/auto`)
+### 3. Smart Routing (if model is `auto`, `eco`, or `premium`)
 
-```typescript
-// Extract user's last message
-const prompt = messages.findLast((m) => m.role === "user")?.content;
-
-// Run 14-dimension weighted scorer
-const decision = route(prompt, systemPrompt, maxTokens, {
-  config: DEFAULT_ROUTING_CONFIG,
-  modelPricing,
-});
-
+```go
+prompt, systemPrompt := extractPrompts(req.Messages)
+decision, _ := router.Route(prompt, systemPrompt, maxTokens, router.RouterOptions{
+    Config:         config,
+    ModelPricing:   pricing,
+    RoutingProfile: "auto", // "auto", "eco", "premium"
+    HasTools:       len(req.Tools) > 0,
+})
 // decision = {
-//   model: "google/gemini-2.5-flash",
-//   tier: "SIMPLE",
-//   confidence: 0.92,
-//   savings: 0.99,
-//   costEstimate: 0.0012,
+//   Model: "google/gemini-2.5-flash",
+//   Tier: "SIMPLE",
+//   Confidence: 0.92,
+//   Savings: 0.99,
+//   CostEstimate: 0.0012,
 // }
 ```
 
-### 4. Balance Check
+### 4. Session Pinning
 
-```typescript
-const estimated = estimateAmount(modelId, bodyLength, maxTokens);
-const sufficiency = await balanceMonitor.checkSufficient(estimated);
-
-if (sufficiency.info.isEmpty) {
-  throw new EmptyWalletError(walletAddress);
+```go
+// Pin model to session for consistency
+if sessionID != "" {
+    sessions.SetSession(sessionID, model, tier, userExplicit)
 }
 
-if (!sufficiency.sufficient) {
-  throw new InsufficientFundsError({ ... });
-}
-
-if (sufficiency.info.isLow) {
-  onLowBalance({ balanceUSD, walletAddress });
+// User's explicit /model choice survives profile routing
+if entry.UserExplicit {
+    // Skip auto-routing, keep user's choice
 }
 ```
 
-### 5. SSE Heartbeat (for streaming)
+### 5. Fallback Chain (on provider errors)
 
-```typescript
-if (isStreaming) {
-  // Send 200 + headers immediately
-  res.writeHead(200, {
-    "content-type": "text/event-stream",
-    "cache-control": "no-cache",
-  });
+```go
+// Try all models in the tier's fallback chain
+for _, tryModel := range fallbackChain {
+    resp, err := retry.Do(ctx, makeReqFor(tryModel))
+    if err != nil || resp.StatusCode >= 400 {
+        attempts = append(attempts, attemptResult{model: tryModel, reason: err.Error()})
+        continue
+    }
+    return resp // Success
+}
 
-  // Heartbeat every 2s to prevent timeout
-  heartbeatInterval = setInterval(() => {
-    res.write(": heartbeat\n\n");
-  }, 2000);
+// All failed → structured error
+// "All 3 models failed. Tried: model-a (timeout), model-b (HTTP 503), ..."
+```
+
+### 6. Empty Turn Detection
+
+```go
+// Detect degraded responses (empty content, no tool_calls, finish_reason=stop)
+if isEmptyTurn(respBody) {
+    // Silently retry with next model in fallback chain
 }
 ```
 
-### 6. x402 Payment Flow
+### 7. Response Enhancement
 
-**Base (EVM) — EIP-712 USDC:**
+```go
+// Inject actual routed model into every SSE chunk
+chunk["model"] = resolvedModel
 
-```
-1. Request → blockrun.ai/api
-2. ← 402 Payment Required
-   {
-     "x402Version": 1,
-     "accepts": [{
-       "scheme": "exact",
-       "network": "base",
-       "maxAmountRequired": "5000",  // $0.005 USDC
-       "resource": "https://blockrun.ai/api/v1/chat/completions",
-       "payTo": "0x..."
-     }]
-   }
-3. Sign EIP-712 typed data (EIP-3009 TransferWithAuthorization) with EVM wallet key
-4. Retry with X-PAYMENT header
-5. ← 200 OK with response
-```
-
-**Solana — SVM USDC:**
-
-```
-1. Request → sol.blockrun.ai/api
-2. ← 402 Payment Required
-   {
-     "x402Version": 1,
-     "accepts": [{
-       "scheme": "exact",
-       "network": "solana",
-       "maxAmountRequired": "5000",  // $0.005 USDC (6 decimals)
-       "resource": "https://sol.blockrun.ai/api/v1/chat/completions",
-       "payTo": "<base58 address>"
-     }]
-   }
-3. Build and sign Solana transaction (SPL Token USDC transfer) with Solana wallet key
-   - Wallet derived via SLIP-10 Ed25519 (BIP-44 m/44'/501'/0'/0', Phantom-compatible)
-4. Retry with X-PAYMENT header (base64-encoded signed transaction)
-5. ← 200 OK with response
-```
-
-> **Important:** Both chains accept only **USDC** tokens. Sending SOL or ETH to the wallet will not fund API payments.
-
-### 7. Fallback Chain (on provider errors)
-
-```typescript
-const FALLBACK_STATUS_CODES = [400, 401, 402, 403, 429, 500, 502, 503, 504];
-
-for (const model of fallbackChain) {
-  const result = await tryModelRequest(model, ...);
-
-  if (result.success) {
-    return result.response;
-  }
-
-  if (result.isProviderError && !isLastAttempt) {
-    console.log(`Fallback: ${model} → next`);
-    continue;
-  }
-
-  break;
-}
-```
-
-### 8. Response Streaming
-
-```typescript
-// Convert non-streaming JSON to SSE format
-// (BlockRun API returns JSON, we simulate SSE)
-
-// Chunk 1: role
-data: {"id":"...","object":"chat.completion.chunk","choices":[{"delta":{"role":"assistant"}}]}
-
-// Chunk 2: content
-data: {"id":"...","object":"chat.completion.chunk","choices":[{"delta":{"content":"4"}}]}
-
-// Chunk 3: finish
-data: {"id":"...","object":"chat.completion.chunk","choices":[{"delta":{},"finish_reason":"stop"}]}
-
-data: [DONE]
+// Inject cost breakdown into usage
+usage["cost"] = buildCostBreakdown(model, tier, profile, pricing, inputTok, outputTok)
+// { total: 0.0012, input: 0.0004, output: 0.0008, baseline: 0.12, savings_pct: 99 }
 ```
 
 ---
@@ -239,72 +151,36 @@ data: [DONE]
 
 The routing engine uses a 15-dimension weighted scorer that runs entirely locally:
 
-```typescript
-function classifyByRules(
-  prompt: string,
-  systemPrompt: string | undefined,
-  tokenCount: number,
-  config: ScoringConfig,
-): ClassificationResult {
-  let score = 0;
-  const signals: string[] = [];
+| # | Dimension | Weight | Detection |
+|---|-----------|--------|-----------|
+| 1 | reasoningMarkers | 0.18 | "prove", "theorem", "step by step" |
+| 2 | codePresence | 0.15 | "function", "class", "import", code blocks |
+| 3 | multiStepPatterns | 0.12 | regex: first.*then, step \d |
+| 4 | technicalTerms | 0.10 | "algorithm", "kubernetes", "database" |
+| 5 | tokenCount | 0.08 | <50 tokens=-1.0, >500=+1.0 |
+| 6 | creativeMarkers | 0.05 | "story", "poem", "brainstorm" |
+| 7 | questionComplexity | 0.05 | >3 question marks |
+| 8 | agenticTask | 0.04 | "edit", "deploy", "debug" |
+| 9 | constraintCount | 0.04 | "at most", "O(n)", "limit" |
+| 10 | imperativeVerbs | 0.03 | "build", "create", "implement" |
+| 11 | outputFormat | 0.03 | "json", "yaml", "table" |
+| 12 | simpleIndicators | 0.02 | "what is", "hello" (negative!) |
+| 13 | referenceComplexity | 0.02 | "the code above" |
+| 14 | domainSpecificity | 0.02 | "quantum", "FPGA", "genomics" |
+| 15 | negationComplexity | 0.01 | "don't", "avoid", "never" |
 
-  // Dimension 1: Reasoning markers (weight: 0.18)
-  const reasoningCount = countKeywords(prompt, config.reasoningKeywords);
-  if (reasoningCount >= 2) {
-    score += 0.18 * 2; // Double weight for multiple markers
-    signals.push("reasoning");
-  }
+**Tier boundaries**: SIMPLE < 0.0 < MEDIUM < 0.3 < COMPLEX < 0.5 < REASONING
 
-  // Dimension 2: Code presence (weight: 0.15)
-  if (hasCodeBlock(prompt) || countKeywords(prompt, config.codeKeywords) > 0) {
-    score += 0.15;
-    signals.push("code");
-  }
+**Confidence**: Sigmoid calibration `1/(1+exp(-12*distance))`, threshold 0.7
 
-  // ... 13 more dimensions
+### Agentic Mode (3-state)
 
-  // Sigmoid calibration
-  const confidence = sigmoid(score, (k = 8), (midpoint = 0.5));
+```go
+type AgenticMode *bool // nil=auto, true=force, false=disable
 
-  return { score, confidence, tier: selectTier(score, confidence), signals };
-}
-```
-
-### Tier Selection
-
-```typescript
-function selectTier(score: number, confidence: number): Tier | null {
-  // Special case: 2+ reasoning markers → REASONING at high confidence
-  if (signals.includes("reasoning") && reasoningCount >= 2) {
-    return "REASONING";
-  }
-
-  if (confidence < 0.7) {
-    return null; // Ambiguous → default to MEDIUM
-  }
-
-  if (score < 0.3) return "SIMPLE";
-  if (score < 0.6) return "MEDIUM";
-  if (score < 0.8) return "COMPLEX";
-  return "REASONING";
-}
-```
-
-### Overrides
-
-Certain conditions force tier assignment:
-
-```typescript
-// Large context → COMPLEX
-if (tokenCount > 100000) {
-  return { tier: "COMPLEX", method: "override:large_context" };
-}
-
-// Structured output (JSON/YAML) → min MEDIUM
-if (systemPrompt?.includes("json") || systemPrompt?.includes("yaml")) {
-  return { tier: Math.max(tier, "MEDIUM"), method: "override:structured" };
-}
+// nil (auto): detect from tools + keywords
+// true: force agentic routing regardless of prompt
+// false: disable agentic detection entirely
 ```
 
 ---
@@ -313,247 +189,143 @@ if (systemPrompt?.includes("json") || systemPrompt?.includes("yaml")) {
 
 ### x402 Protocol
 
-ClawRouter uses the [x402 protocol](https://x402.org) for micropayments. Both chains use the same flow; the signing step differs:
+DOSRouter supports the [x402 protocol](https://x402.org) for pay-per-request micropayments. No API key or account required.
 
 ```
-┌────────────┐     ┌──────────────────────┐     ┌────────────┐
-│   Client   │────▶│  BlockRun API        │────▶│  Provider  │
-│ (ClawRouter)     │  (Base: blockrun.ai  │     │ (OpenAI)   │
-└────────────┘     │   Sol: sol.blockrun) │     └────────────┘
-      │                  │
-      │ 1. Request       │
-      │─────────────────▶│
-      │                  │
-      │ 2. 402 + price   │
-      │◀─────────────────│
-      │                  │
-      │ 3. Sign payment  │
-      │  Base: EIP-712   │
-      │  Solana: SVM tx  │
-      │  (USDC only)     │
-      │                  │
-      │ 4. Retry + sig   │
-      │─────────────────▶│
-      │                  │
-      │ 5. Response      │
-      │◀─────────────────│
+Client                    Upstream API
+  │                           │
+  │ 1. Request                │
+  │──────────────────────────▶│
+  │                           │
+  │ 2. 402 Payment Required   │
+  │◀──────────────────────────│
+  │                           │
+  │ 3. Sign EVM payment       │
+  │   (USDC on configured     │
+  │    chain)                  │
+  │                           │
+  │ 4. Retry with X-PAYMENT   │
+  │──────────────────────────▶│
+  │                           │
+  │ 5. 200 OK + response      │
+  │◀──────────────────────────│
 ```
 
-### EVM Signing (Base — EIP-712)
+### Supported Chains
 
-```typescript
-const typedData = {
-  types: {
-    TransferWithAuthorization: [
-      { name: "from", type: "address" },
-      { name: "to", type: "address" },
-      { name: "value", type: "uint256" },
-      { name: "validAfter", type: "uint256" },
-      { name: "validBefore", type: "uint256" },
-      { name: "nonce", type: "bytes32" },
-    ],
-  },
-  primaryType: "TransferWithAuthorization",
-  domain: { name: "USD Coin", version: "2", chainId: 8453, verifyingContract: USDC_BASE },
-  message: {
-    from: walletAddress,
-    to: payTo,
-    value: BigInt(5000), // 0.005 USDC (6 decimals)
-    validAfter: BigInt(0),
-    validBefore: BigInt(Math.floor(Date.now() / 1000) + 3600),
-    nonce: crypto.getRandomValues(new Uint8Array(32)),
-  },
-};
+| Chain | Chain ID | Token | Notes |
+|-------|----------|-------|-------|
+| DOS Chain | 7979 | DOS | Default chain |
+| Base | 8453 | USDC | EVM L2 |
+| Avalanche C-Chain | 43114 | USDC | EVM L1 |
 
-const signature = await account.signTypedData(typedData);
+### Wallet Management
+
+```bash
+# Auto-generated on first run, saved to ~/.dosrouter/wallet.json
+dosrouter wallet
+
+# Recover from mnemonic
+dosrouter wallet recover
+
+# Switch payment chain
+dosrouter chain doschain
+dosrouter chain base
+dosrouter chain avalanche
 ```
 
-### Solana Signing (SLIP-10 Ed25519)
+### Pre-Authorization Cache
 
-```typescript
-// Wallet derived via SLIP-10 Ed25519 — Phantom-compatible
-// Path: m/44'/501'/0'/0'
-const solanaAccount = await deriveSlip10Ed25519Key(mnemonic, "m/44'/501'/0'/0'");
-
-// Build SPL Token USDC transfer instruction
-const transaction = buildSolanaPaymentTransaction({
-  from: solanaAddress,
-  to: payTo, // base58 recipient
-  mint: USDC_SOLANA, // EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v
-  amount: BigInt(5000), // 0.005 USDC (6 decimals)
-});
-
-const signedTx = await signTransaction(transaction, solanaAccount);
-// Encoded as base64 in X-PAYMENT header
-```
-
-### Pre-Authorization
-
-To skip the 402 round trip:
-
-```typescript
-// Estimate cost before request
-const estimated = estimateAmount(modelId, bodyLength, maxTokens);
-
-// Pre-sign payment with estimate (+ 20% buffer)
-const preAuth: PreAuthParams = { estimatedAmount: estimated };
-
-// Request with pre-signed payment
-const response = await payFetch(url, init, preAuth);
-```
+Cached payment requirements per endpoint+model key, with 5-minute TTL. Skips the 402 round trip for subsequent requests to the same endpoint.
 
 ---
 
 ## Optimizations
 
-### 1. Request Deduplication
+### 1. Response Cache
 
-Prevents double-charging when clients retry after timeout:
+LRU cache with TTL, SHA-256 keyed on canonical request body. Configurable max size and TTL.
 
-```typescript
-class RequestDeduplicator {
-  private cache = new Map<string, CachedResponse>();
-  private inflight = new Map<string, Promise<CachedResponse>>();
-  private TTL_MS = 30_000;
+### 2. Request Deduplication
 
-  static hash(body: Buffer): string {
-    return createHash("sha256").update(body).digest("hex");
-  }
+Prevents duplicate upstream calls when clients retry after timeout. Inflight requests are coalesced.
 
-  getCached(key: string): CachedResponse | undefined {
-    const entry = this.cache.get(key);
-    if (entry && Date.now() - entry.completedAt < this.TTL_MS) {
-      return entry;
-    }
-    return undefined;
-  }
-}
-```
+### 3. Context Compression
 
-### 2. SSE Heartbeat
+Automatically compresses long conversation contexts when they exceed thresholds, reducing token usage.
 
-Prevents upstream timeout while waiting for x402 payment:
+### 4. Balance Caching
 
-```
-0s:  Request received
-0s:  → 200 OK, Content-Type: text/event-stream
-0s:  → : heartbeat
-2s:  → : heartbeat  (client stays connected)
-4s:  → : heartbeat
-5s:  x402 payment completes
-5s:  → data: {"choices":[...]}
-5s:  → data: [DONE]
-```
-
-### 3. Balance Caching
-
-Avoids RPC calls on every request. Dual-chain monitors are chain-aware:
-
-```typescript
-// EVM monitor (Base): reads USDC balance via eth_call on Base RPC
-class BalanceMonitor {
-  private cachedBalance: bigint | undefined;
-  private cacheTime = 0;
-  private CACHE_TTL_MS = 60_000; // 1 minute
-
-  async checkBalance(): Promise<BalanceInfo> {
-    if (this.cachedBalance !== undefined && Date.now() - this.cacheTime < this.CACHE_TTL_MS) {
-      return this.formatBalance(this.cachedBalance);
-    }
-
-    // Fetch USDC balance from Base RPC
-    const balance = await this.fetchUSDCBalance(); // ERC-20 balanceOf call
-    this.cachedBalance = balance;
-    this.cacheTime = Date.now();
-    return this.formatBalance(balance);
-  }
-
-  deductEstimated(amount: bigint): void {
-    if (this.cachedBalance !== undefined) {
-      this.cachedBalance -= amount;
-    }
-  }
-}
-
-// Solana monitor: reads SPL Token USDC balance via getTokenAccountBalance
-class SolanaBalanceMonitor {
-  // Same interface as BalanceMonitor — proxy.ts uses AnyBalanceMonitor union type
-  // Retries once on empty to handle flaky public RPC endpoints
-  // Cache TTL 60s; startup balance never cached (forces fresh read after install)
-}
-
-// proxy.ts selects the correct monitor at startup:
-const balanceMonitor: AnyBalanceMonitor =
-  paymentChain === "solana"
-    ? new SolanaBalanceMonitor(solanaAddress, rpcUrl)
-    : new BalanceMonitor(evmAddress, rpcUrl);
-```
-
-### 4. Proxy Reuse
-
-Detects and reuses existing proxy to avoid `EADDRINUSE`:
-
-```typescript
-async function startProxy(options: ProxyOptions): Promise<ProxyHandle> {
-  const port = options.port ?? getProxyPort();
-
-  // Check if proxy already running
-  const existingWallet = await checkExistingProxy(port);
-  if (existingWallet) {
-    // Return handle that uses existing proxy
-    return {
-      port,
-      baseUrl: `http://127.0.0.1:${port}`,
-      walletAddress: existingWallet,
-      close: async () => {},  // No-op
-    };
-  }
-
-  // Start new proxy
-  const server = createServer(...);
-  server.listen(port, "127.0.0.1");
-  // ...
-}
-```
+RPC balance queries cached with 30-second TTL. Zero balances never cached (enables immediate detection of newly funded wallets).
 
 ---
 
 ## Source Structure
 
 ```
-src/
-├── index.ts              # Plugin entry, OpenClaw integration
-├── proxy.ts              # HTTP proxy server, request handling, chain selection
-├── provider.ts           # OpenClaw provider registration
-├── models.ts             # 41+ model definitions with pricing
-├── auth.ts               # Wallet key resolution (file → env → generate)
-├── wallet.ts             # BIP-39 mnemonic, EVM + Solana key derivation (SLIP-10)
-├── x402.ts               # EVM EIP-712 payment signing, @x402/fetch
-├── balance.ts            # EVM USDC balance monitoring (Base RPC)
-├── solana-balance.ts     # Solana USDC balance monitoring (SPL Token)
-├── payment-preauth.ts    # Pre-authorization caching (EVM only)
-├── dedup.ts              # Request deduplication (SHA-256 → cache)
-├── logger.ts             # JSON usage logging to disk
-├── errors.ts             # Custom error types
-├── retry.ts              # Fetch retry with exponential backoff
-├── version.ts            # Version from package.json
-└── router/
-    ├── index.ts          # route() entry point
-    ├── rules.ts          # 15-dimension weighted scorer (9-language)
-    ├── selector.ts       # Tier → model selection + fallback
-    ├── config.ts         # Default routing configuration (ECO/AUTO/PREMIUM/AGENTIC)
-    └── types.ts          # TypeScript type definitions
+router/              Core routing logic
+  types.go           Type definitions (Tier, ScoringResult, RoutingDecision)
+  config.go          Default config with multilingual keywords (9 languages)
+  rules.go           15-dimension weighted scorer (<0.04ms)
+  selector.go        Tier -> Model selection with cost/savings calculation
+  strategy.go        Strategy pattern + promotions + agentic detection
+  llm_classifier.go  LLM fallback for ambiguous requests
+  router.go          Entry point (Route function)
+
+models/              Model catalog
+  models.go          55+ model definitions, aliases, pricing, capabilities
+
+proxy/               OpenAI-compatible proxy
+  proxy.go           HTTP server, smart routing, SSE streaming, image gen
+
+session/             Session management
+  session.go         Conversation pinning with TTL and explicit user overrides
+
+wallet/              Wallet management
+  wallet.go          BIP-39 mnemonic, EVM key derivation, balance queries
+
+payment/             Payment module
+  payment.go         x402 protocol, pre-auth cache
+
+cache/               Response cache
+  cache.go           TTL + LRU response cache with SHA-256 keys
+
+dedup/               Request deduplication
+  dedup.go           Inflight coalescing, completed response cache
+
+compression/         Context compression
+  compression.go     Automatic conversation compaction
+
+retry/               Retry logic
+  retry.go           Exponential backoff, retryable status codes
+
+spendcontrol/        Spending limits
+  spendcontrol.go    Per-request, hourly, daily, session limits
+
+journal/             Session journal
+  journal.go         Event extraction and context injection
+
+stats/               Usage statistics
+  stats.go           Aggregation, ASCII formatting, log parsing
+
+logger/              Logging
+  logger.go          JSONL usage logging to disk
+
+errors/              Error types
+  errors.go          Wallet, balance, RPC error types
+
+cmd/dosrouter/       CLI
+  main.go            serve, classify, models, stats, wallet, doctor commands
 ```
 
 ### Key Files
 
-| File                 | Purpose                                                       |
-| -------------------- | ------------------------------------------------------------- |
-| `proxy.ts`           | Core request handling, SSE simulation, fallback chain         |
-| `wallet.ts`          | BIP-39 mnemonic generation, EVM + Solana (SLIP-10) derivation |
-| `router/rules.ts`    | 15-dimension weighted scorer, 9-language keyword sets         |
-| `x402.ts`            | EIP-712 typed data signing, payment header formatting         |
-| `balance.ts`         | USDC balance via Base RPC (EVM), caching, thresholds          |
-| `solana-balance.ts`  | USDC balance via Solana RPC (SPL Token), caching, retries     |
-| `payment-preauth.ts` | Pre-authorization cache (EVM; skipped for Solana)             |
-| `dedup.ts`           | SHA-256 hashing, 30s response cache                           |
+| File | Purpose |
+|------|---------|
+| `proxy/proxy.go` | Core request handling, SSE streaming, fallback chain, cost injection |
+| `router/rules.go` | 15-dimension weighted scorer, 9-language keyword sets |
+| `router/strategy.go` | Routing strategy, promotions, agentic detection |
+| `wallet/wallet.go` | EVM wallet generation, balance monitoring |
+| `payment/payment.go` | x402 payment protocol, pre-auth cache |
+| `session/session.go` | Session pinning with userExplicit flag |
+| `models/models.go` | 55+ model definitions with pricing and capabilities |

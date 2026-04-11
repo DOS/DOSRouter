@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Let ClawRouter users opt in as worker nodes that execute HTTP health checks and earn USDC micropayments via x402.
+**Goal:** Let DOSRouter users opt in as worker nodes that execute HTTP health checks and earn USDC micropayments via x402.
 
-**Architecture:** ClawRouter polls BlockRun for tasks every 30s, executes HTTP checks, signs results with its existing wallet key, and submits to BlockRun. BlockRun verifies the signature, accumulates credits per worker, and pays out via x402 (TransferWithAuthorization with `payTo = worker address`) when credits hit a $0.01 threshold.
+**Architecture:** DOSRouter polls DOS for tasks every 30s, executes HTTP checks, signs results with its existing wallet key, and submits to DOS. DOS verifies the signature, accumulates credits per worker, and pays out via x402 (TransferWithAuthorization with `payTo = worker address`) when credits hit a $0.01 threshold.
 
 **Tech Stack:** viem (signing), x402 (payment), existing CDP facilitator (settlement), in-memory task queue (pilot)
 
@@ -14,17 +14,17 @@
 
 ### Verification: Trust-based (no consensus needed)
 
-Workers are existing paying ClawRouter users. The actual work (one HTTP fetch) is cheaper than writing cheating code. Reward is $0.0001 — no rational incentive to fabricate. Simple signature proves identity; that's enough.
+Workers are existing paying DOSRouter users. The actual work (one HTTP fetch) is cheaper than writing cheating code. Reward is $0.0001 — no rational incentive to fabricate. Simple signature proves identity; that's enough.
 
 ### Payment: x402 with reversed payTo
 
-x402 is EIP-3009 TransferWithAuthorization. For worker payouts, BlockRun signs as the payer:
+x402 is EIP-3009 TransferWithAuthorization. For worker payouts, DOS signs as the payer:
 
-- `from: WORKER_PAYOUT_WALLET` (BlockRun treasury)
+- `from: WORKER_PAYOUT_WALLET` (DOS treasury)
 - `to: workerAddress`
 - `value: accumulatedMicros`
 
-BlockRun calls the existing CDP facilitator `/settle` endpoint. No new payment infrastructure needed.
+DOS calls the existing CDP facilitator `/settle` endpoint. No new payment infrastructure needed.
 
 ### Payout batching (gas efficiency)
 
@@ -74,7 +74,7 @@ Pilot (1,000 workers, 3 tasks):
 
 ## Files
 
-### ClawRouter (new files)
+### DOSRouter (new files)
 
 | File                   | Action                                                    |
 | ---------------------- | --------------------------------------------------------- |
@@ -83,7 +83,7 @@ Pilot (1,000 workers, 3 tasks):
 | `src/worker/index.ts`  | CREATE                                                    |
 | `src/index.ts`         | MODIFY — add worker startup in `startProxyInBackground()` |
 
-### BlockRun (new files)
+### DOS (new files)
 
 | File                                     | Action |
 | ---------------------------------------- | ------ |
@@ -92,7 +92,7 @@ Pilot (1,000 workers, 3 tasks):
 | `src/app/api/v1/worker/tasks/route.ts`   | CREATE |
 | `src/app/api/v1/worker/results/route.ts` | CREATE |
 
-### BlockRun: add health endpoint (needed for self-verification)
+### DOS: add health endpoint (needed for self-verification)
 
 | File                          | Action                           |
 | ----------------------------- | -------------------------------- |
@@ -100,7 +100,7 @@ Pilot (1,000 workers, 3 tasks):
 
 ---
 
-## Task 1: ClawRouter — Worker Types
+## Task 1: DOSRouter — Worker Types
 
 **Files:**
 
@@ -149,7 +149,7 @@ git commit -m "feat(worker): add worker network types"
 
 ---
 
-## Task 2: ClawRouter — HTTP Check Executor
+## Task 2: DOSRouter — HTTP Check Executor
 
 **Files:**
 
@@ -170,7 +170,7 @@ export async function executeHttpCheck(task: WorkerTask): Promise<{
       method: "GET",
       signal: AbortSignal.timeout(task.timeoutMs),
       redirect: "follow",
-      headers: { "User-Agent": "BlockRun-Worker/1.0" },
+      headers: { "User-Agent": "DOS-Worker/1.0" },
     });
     return {
       success: response.status === task.expectedStatus,
@@ -217,7 +217,7 @@ git commit -m "feat(worker): add HTTP check executor"
 
 ---
 
-## Task 3: ClawRouter — WorkerNode Class
+## Task 3: DOSRouter — WorkerNode Class
 
 **Files:**
 
@@ -230,7 +230,7 @@ import { privateKeyToAccount } from "viem/accounts";
 import type { WorkerTask, WorkerResult, WorkerStatus } from "./types.js";
 import { executeHttpCheck, buildSignableMessage } from "./checks.js";
 
-const BLOCKRUN_API = "https://blockrun.ai/api";
+const DOSROUTER_API = "https://dos.ai/api";
 const POLL_INTERVAL_MS = 30_000;
 const MAX_CONCURRENT_CHECKS = 10;
 const REGION = process.env.WORKER_REGION || "unknown";
@@ -243,7 +243,7 @@ export class WorkerNode {
   private pollTimer?: ReturnType<typeof setInterval>;
   private busy = false;
 
-  constructor(walletKey: string, walletAddress: string, apiBase = BLOCKRUN_API) {
+  constructor(walletKey: string, walletAddress: string, apiBase = DOSROUTER_API) {
     this.privateKey = walletKey as `0x${string}`;
     this.address = walletAddress;
     this.apiBase = apiBase;
@@ -304,7 +304,7 @@ export class WorkerNode {
     const url = `${this.apiBase}/v1/worker/tasks?address=${this.address}&region=${REGION}`;
     const res = await fetch(url, {
       signal: AbortSignal.timeout(10_000),
-      headers: { "User-Agent": "BlockRun-Worker/1.0" },
+      headers: { "User-Agent": "DOS-Worker/1.0" },
     });
     if (!res.ok) {
       throw new Error(`Tasks endpoint returned ${res.status}`);
@@ -356,7 +356,7 @@ export class WorkerNode {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "User-Agent": "BlockRun-Worker/1.0",
+          "User-Agent": "DOS-Worker/1.0",
         },
         body: JSON.stringify(results),
         signal: AbortSignal.timeout(15_000),
@@ -382,7 +382,7 @@ export class WorkerNode {
 **Step 2:** Verify TypeScript compiles
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter
+cd /Users/vickyfu/Documents/dos-web/DOSRouter
 npx tsc --noEmit
 ```
 
@@ -397,7 +397,7 @@ git commit -m "feat(worker): add WorkerNode class with polling and signing"
 
 ---
 
-## Task 4: ClawRouter — Wire Worker Mode in index.ts
+## Task 4: DOSRouter — Wire Worker Mode in index.ts
 
 **Files:**
 
@@ -413,8 +413,8 @@ activeProxyHandle = proxy;
 Add immediately after:
 
 ```typescript
-// Worker mode: opt-in via CLAWROUTER_WORKER=1 or --worker flag
-const workerMode = process.env.CLAWROUTER_WORKER === "1" || process.argv.includes("--worker");
+// Worker mode: opt-in via DOSROUTER_WORKER=1 or --worker flag
+const workerMode = process.env.DOSROUTER_WORKER === "1" || process.argv.includes("--worker");
 
 if (workerMode) {
   const { WorkerNode } = await import("./worker/index.js");
@@ -437,12 +437,12 @@ npx tsc --noEmit
 
 ```bash
 git add src/index.ts
-git commit -m "feat(worker): activate WorkerNode when CLAWROUTER_WORKER=1"
+git commit -m "feat(worker): activate WorkerNode when DOSROUTER_WORKER=1"
 ```
 
 ---
 
-## Task 5: BlockRun — Worker Task Registry
+## Task 5: DOS — Worker Task Registry
 
 **Files:**
 
@@ -464,12 +464,12 @@ export interface WorkerTask {
   region?: string;
 }
 
-// Pilot seed tasks — BlockRun-owned endpoints, verifiable and real
+// Pilot seed tasks — DOS-owned endpoints, verifiable and real
 export const PILOT_TASKS: WorkerTask[] = [
   {
     id: "task_br_health",
     type: "http_check",
-    url: "https://blockrun.ai/api/health",
+    url: "https://dos.ai/api/health",
     expectedStatus: 200,
     timeoutMs: 10_000,
     rewardMicros: 100, // $0.0001
@@ -477,7 +477,7 @@ export const PILOT_TASKS: WorkerTask[] = [
   {
     id: "task_br_models",
     type: "http_check",
-    url: "https://blockrun.ai/api/v1/models",
+    url: "https://dos.ai/api/v1/models",
     expectedStatus: 200,
     timeoutMs: 10_000,
     rewardMicros: 100,
@@ -540,20 +540,20 @@ export function getTaskById(taskId: string): WorkerTask | undefined {
 **Step 2:** Commit
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/blockrun
+cd /Users/vickyfu/Documents/dos-web/dos
 git add src/lib/worker-tasks.ts
 git commit -m "feat(worker): add task registry with pilot seed tasks"
 ```
 
 ---
 
-## Task 6: BlockRun — Worker Payout Module
+## Task 6: DOS — Worker Payout Module
 
 **Files:**
 
 - Create: `src/lib/worker-payouts.ts`
 
-This module accumulates credits per worker and triggers x402-style USDC payouts when threshold is reached. Uses the same EIP-3009 signing infrastructure as the rest of BlockRun.
+This module accumulates credits per worker and triggers x402-style USDC payouts when threshold is reached. Uses the same EIP-3009 signing infrastructure as the rest of DOS.
 
 ```typescript
 import { signTypedData, privateKeyToAccount } from "viem/accounts";
@@ -608,8 +608,8 @@ export function getPendingCredits(workerAddress: string): number {
 }
 
 /**
- * Send USDC from BlockRun payout wallet to worker.
- * Uses same EIP-3009 TransferWithAuthorization as x402, but BlockRun is the payer.
+ * Send USDC from DOS payout wallet to worker.
+ * Uses same EIP-3009 TransferWithAuthorization as x402, but DOS is the payer.
  */
 async function sendUsdcToWorker(
   workerAddress: `0x${string}`,
@@ -629,8 +629,8 @@ async function sendUsdcToWorker(
   const nonceBytes = crypto.getRandomValues(new Uint8Array(32));
   const nonce = `0x${Buffer.from(nonceBytes).toString("hex")}` as `0x${string}`;
 
-  // Sign TransferWithAuthorization: BlockRun treasury → worker
-  // Same scheme as ClawRouter's x402.ts but payTo = worker address
+  // Sign TransferWithAuthorization: DOS treasury → worker
+  // Same scheme as DOSRouter's x402.ts but payTo = worker address
   const signature = await signTypedData({
     privateKey: payoutKey as `0x${string}`,
     domain: {
@@ -725,7 +725,7 @@ git commit -m "feat(worker): add payout module with batched x402 USDC transfers"
 
 ---
 
-## Task 7: BlockRun — GET /api/v1/worker/tasks
+## Task 7: DOS — GET /api/v1/worker/tasks
 
 **Files:**
 
@@ -775,7 +775,7 @@ git commit -m "feat(worker): add GET /api/v1/worker/tasks endpoint"
 
 ---
 
-## Task 8: BlockRun — POST /api/v1/worker/results
+## Task 8: DOS — POST /api/v1/worker/results
 
 **Files:**
 
@@ -929,31 +929,31 @@ git commit -m "feat(worker): add POST /api/v1/worker/results with sig verify and
 
 ## Task 9: Environment Variables
 
-**ClawRouter** (no new env vars needed for basic mode):
+**DOSRouter** (no new env vars needed for basic mode):
 
 ```bash
-CLAWROUTER_WORKER=1        # opt-in to worker mode
+DOSROUTER_WORKER=1        # opt-in to worker mode
 WORKER_REGION=US-West      # optional geographic tag
 ```
 
-**BlockRun** (add to `.env.local` and Cloud Run secrets):
+**DOS** (add to `.env.local` and Cloud Run secrets):
 
 ```bash
 WORKER_PAYOUT_WALLET_KEY=0x...   # treasury key for paying workers
 ```
 
-**Step 1:** Add `WORKER_PAYOUT_WALLET_KEY` to BlockRun's `.env.local.example` (never commit real key).
+**Step 1:** Add `WORKER_PAYOUT_WALLET_KEY` to DOS's `.env.local.example` (never commit real key).
 
-**Step 2:** Document in BlockRun's README or deployment notes.
+**Step 2:** Document in DOS's README or deployment notes.
 
 ---
 
 ## Testing the Pilot End-to-End
 
-**Step 1:** Start BlockRun dev server
+**Step 1:** Start DOS dev server
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/blockrun
+cd /Users/vickyfu/Documents/dos-web/dos
 npm run dev
 ```
 
@@ -964,14 +964,14 @@ curl "http://localhost:3000/api/v1/worker/tasks?address=0x0000000000000000000000
 # Expected: [{id: "task_br_health", ...}, ...]
 ```
 
-**Step 3:** Start ClawRouter in worker mode (pointing at localhost)
+**Step 3:** Start DOSRouter in worker mode (pointing at localhost)
 
 ```bash
-cd /Users/vickyfu/Documents/blockrun-web/ClawRouter
-CLAWROUTER_WORKER=1 BLOCKRUN_API_BASE=http://localhost:3000/api npx openclaw gateway start
+cd /Users/vickyfu/Documents/dos-web/DOSRouter
+DOSROUTER_WORKER=1 DOSROUTER_API_BASE=http://localhost:3000/api npx dosrouter gateway start
 ```
 
-**Note:** `BLOCKRUN_API_BASE` override needs to be wired into `WorkerNode` constructor — add support for this env var.
+**Note:** `DOSROUTER_API_BASE` override needs to be wired into `WorkerNode` constructor — add support for this env var.
 
 **Step 4:** Watch logs for
 
@@ -981,7 +981,7 @@ CLAWROUTER_WORKER=1 BLOCKRUN_API_BASE=http://localhost:3000/api npx openclaw gat
 [Worker] Submitted 3 result(s), earned: $0.000300 USDC
 ```
 
-**Step 5:** Check BlockRun logs for incoming results and payout trigger at $0.01 threshold.
+**Step 5:** Check DOS logs for incoming results and payout trigger at $0.01 threshold.
 
 ---
 
@@ -991,4 +991,4 @@ CLAWROUTER_WORKER=1 BLOCKRUN_API_BASE=http://localhost:3000/api npx openclaw gat
 - Buyer dashboard (custom endpoint monitoring)
 - Geographic routing (assign tasks by region)
 - Slash mechanism if needed at scale (currently not needed)
-- `/wallet worker-status` command in ClawRouter to show earnings
+- `/wallet worker-status` command in DOSRouter to show earnings

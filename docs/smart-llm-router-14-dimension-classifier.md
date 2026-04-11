@@ -1,6 +1,6 @@
 # Building a Smart LLM Router: How We Benchmarked 46 Models and Built a 14-Dimension Classifier
 
-_March 20, 2026 | BlockRun Engineering_
+_March 20, 2026 | DOS Engineering_
 
 When you route AI requests across 55+ models from 8 providers, you can't just pick the cheapest one. You can't just pick the fastest one either. We learned this the hard way.
 
@@ -8,7 +8,7 @@ This is the technical story of how we benchmarked every model on our platform, d
 
 ## The Problem: One Gateway, 46 Models, Infinite Wrong Choices
 
-BlockRun is an x402 micropayment gateway. Every LLM request flows through our proxy, gets authenticated via on-chain USDC payment, and is forwarded to the appropriate provider. The payment overhead adds 50-100ms to every request.
+DOS is an x402 micropayment gateway. Every LLM request flows through our proxy, gets authenticated via on-chain USDC payment, and is forwarded to the appropriate provider. The payment overhead adds 50-100ms to every request.
 
 Our users set `model: "auto"` and expect us to pick the right model. But "right" means different things for different requests:
 
@@ -26,8 +26,8 @@ Before building the router, we needed ground truth. We benchmarked all 55+ model
 ### Methodology
 
 ```
-Setup:     ClawRouter v0.12.47 proxy on localhost
-           → BlockRun x402 gateway (Base EVM chain)
+Setup:     DOSRouter v0.12.47 proxy on localhost
+           → DOS x402 gateway (Base EVM chain)
            → Provider APIs (OpenAI, Anthropic, Google, xAI, DeepSeek, Moonshot, MiniMax, Z.AI)
 
 Prompts:   3 Python coding tasks (IPv4 validation, LCS algorithm, LRU cache)
@@ -312,12 +312,12 @@ We originally designed a two-stage system where low-confidence rules-based class
 
 ## Appendix: Full Benchmark Data
 
-Raw data (55+ models, latency, throughput, IQ scores, pricing): [`benchmark-merged.json`](https://github.com/BlockRunAI/ClawRouter/blob/main/benchmark-merged.json)
+Raw data (55+ models, latency, throughput, IQ scores, pricing): [`benchmark-merged.json`](https://github.com/DOSAI/DOSRouter/blob/main/benchmark-merged.json)
 
-Routing configuration: [`src/router/config.ts`](https://github.com/BlockRunAI/ClawRouter/blob/main/src/router/config.ts)
+Routing configuration: [`src/router/config.ts`](https://github.com/DOSAI/DOSRouter/blob/main/src/router/config.ts)
 
-Scoring implementation: [`src/router/rules.ts`](https://github.com/BlockRunAI/ClawRouter/blob/main/src/router/rules.ts)
+Scoring implementation: [`src/router/rules.ts`](https://github.com/DOSAI/DOSRouter/blob/main/src/router/rules.ts)
 
 ---
 
-_BlockRun is the x402 micropayment gateway for AI. One wallet, 55+ models, pay-per-request with USDC. [blockrun.ai](https://blockrun.ai)_
+_DOS is the x402 micropayment gateway for AI. One wallet, 55+ models, pay-per-request with USDC. [dos.ai](https://dos.ai)_

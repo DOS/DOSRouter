@@ -370,10 +370,10 @@ type FileSpendControlStorage struct {
 	Path string
 }
 
-// DefaultFilePath returns ~/.openclaw/blockrun/spending.json.
+// DefaultFilePath returns ~/.dosrouter/spending.json.
 func DefaultFilePath() string {
 	home, _ := os.UserHomeDir()
-	return filepath.Join(home, ".openclaw", "blockrun", "spending.json")
+	return filepath.Join(home, ".dosrouter", "spending.json")
 }
 
 // NewFileStorage creates a FileSpendControlStorage at the default path.

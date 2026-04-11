@@ -9,8 +9,8 @@ import (
 // STATIC_CODEBOOK maps short codes to their expanded phrases. These codes
 // are injected into compressed content and decoded by the receiving end.
 var STATIC_CODEBOOK = map[string]string{
-	// OpenClaw / agent system
-	"$OC01": "openclaw",
+	// DOSRouter / agent system
+	"$OC01": "dosrouter",
 	"$OC02": "tool_call",
 	"$OC03": "function",
 	"$OC04": "arguments",
