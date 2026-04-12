@@ -235,14 +235,22 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	var decision *router.RoutingDecision
 	if isSmartRoute {
-		// Check session pin first
+		// Check session pin first (user-explicit or cache-sticky)
 		if sessionID != "" {
 			if entry := s.sessions.GetSession(sessionID); entry != nil {
-				resolvedModel = entry.Model
-				isSmartRoute = false
-				w.Header().Set("X-DOSRouter-Session", "pinned")
-				// Preserve the explicit flag from the pinned session
-				userExplicit = entry.UserExplicit
+				// Honor user-explicit pin unconditionally
+				if entry.UserExplicit {
+					resolvedModel = entry.Model
+					isSmartRoute = false
+					w.Header().Set("X-DOSRouter-Session", "pinned")
+					userExplicit = true
+				} else if s.sessions.IsCacheSticky(sessionID) {
+					// Cache-sticky: keep model to maximize prefix cache hits
+					resolvedModel = entry.Model
+					isSmartRoute = false
+					w.Header().Set("X-DOSRouter-Session", "cache-sticky")
+					userExplicit = false
+				}
 			}
 		}
 	}
@@ -295,6 +303,17 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		// Pin to session (smart-routed, not user-explicit)
 		if sessionID != "" {
 			s.sessions.SetSession(sessionID, resolvedModel, d.Tier, false)
+
+			// Cache-aware sticky: if context is large, pin model to maximize
+			// provider-side prefix cache hits (reduces latency + cost).
+			// TTL is per-provider (e.g. vLLM self-host gets 10min, Anthropic gets 5min).
+			msgs := extractMessageInfos(req.Messages)
+			if session.ShouldCacheSticky(msgs) {
+				provider := session.ProviderFromModel(resolvedModel)
+				s.sessions.SetCacheSticky(sessionID, provider)
+				w.Header().Set("X-DOSRouter-Cache-Sticky", fmt.Sprintf("activated;provider=%s;ttl=%ds",
+					provider, session.CacheTTLForProvider(provider)/1000))
+			}
 		}
 	}
 
@@ -946,6 +965,33 @@ func normalizeMessagesForThinking(messages []chatMessage) []chatMessage {
 }
 
 // extractPrompts extracts the last user message as prompt and system message.
+// extractMessageInfos converts chatMessages to session.MessageInfo for
+// cache-sticky evaluation. Extracts text content from both string and
+// array-of-parts formats.
+func extractMessageInfos(messages []chatMessage) []session.MessageInfo {
+	infos := make([]session.MessageInfo, 0, len(messages))
+	for _, m := range messages {
+		var content string
+		if len(m.Content) > 0 && m.Content[0] == '"' {
+			json.Unmarshal(m.Content, &content)
+		} else {
+			var parts []struct {
+				Type string `json:"type"`
+				Text string `json:"text"`
+			}
+			if json.Unmarshal(m.Content, &parts) == nil {
+				for _, p := range parts {
+					if p.Type == "text" {
+						content += p.Text
+					}
+				}
+			}
+		}
+		infos = append(infos, session.MessageInfo{Role: m.Role, Content: content})
+	}
+	return infos
+}
+
 func extractPrompts(messages []chatMessage) (prompt, systemPrompt string) {
 	for _, m := range messages {
 		var content string

@@ -37,6 +37,49 @@ func DefaultConfig() Config {
 	return Config{Enabled: false, TimeoutMs: defaultTimeoutMs, HeaderName: defaultHeaderName}
 }
 
+// Cache-aware sticky routing constants.
+// When a request has large context (code paste, document QA), we pin the model
+// to maximize provider-side prefix cache hits. The sticky expires after the
+// provider's prefix cache TTL so we don't lose dynamic routing benefits once
+// the cache is cold anyway.
+const (
+	// Single message above this token estimate triggers immediate sticky.
+	stickyMessageTokenThreshold = 3000
+	// Cumulative conversation history above this triggers sticky.
+	stickyHistoryTokenThreshold = 5000
+)
+
+// Provider prefix cache TTLs in milliseconds. Each provider evicts prefix
+// cache at different intervals — sticky pinning beyond this is pointless
+// because the provider KV cache is already cold.
+var providerCacheTTLMs = map[string]int64{
+	"anthropic": 5 * 60 * 1000,  // 5 min default (up to 1h with extended TTL)
+	"openai":    5 * 60 * 1000,  // ~5-10 min (undocumented, conservative)
+	"deepseek":  5 * 60 * 1000,  // ~5 min
+	"google":    5 * 60 * 1000,  // ~5 min
+	"groq":      5 * 60 * 1000,  // ~5 min
+	"vllm":      10 * 60 * 1000, // 10 min (self-hosted, only evicts on memory pressure)
+	"dosrouter": 10 * 60 * 1000, // 10 min (self-hosted vLLM behind DOSRouter)
+	"default":   5 * 60 * 1000,  // fallback for unknown providers
+}
+
+// CacheTTLForProvider returns the prefix cache TTL for a given provider name.
+func CacheTTLForProvider(provider string) int64 {
+	if ttl, ok := providerCacheTTLMs[provider]; ok {
+		return ttl
+	}
+	return providerCacheTTLMs["default"]
+}
+
+// ProviderFromModel extracts the provider prefix from a model ID.
+// e.g. "anthropic/claude-sonnet-4.6" → "anthropic", "gpt-4o" → "default"
+func ProviderFromModel(modelID string) string {
+	if idx := strings.Index(modelID, "/"); idx > 0 {
+		return modelID[:idx]
+	}
+	return "default"
+}
+
 // Entry holds the state of a single session.
 type Entry struct {
 	Model             string
@@ -48,6 +91,9 @@ type Entry struct {
 	Strikes           int
 	Escalated         bool
 	UserExplicit      bool     // true when user explicitly selected a model (not a routing profile)
+	CacheSticky       bool     // true when session is pinned for prefix cache optimization
+	CacheStickyAt     int64    // when cache sticky was activated (unix millis)
+	Provider          string   // provider name for cache TTL lookup (e.g. "anthropic", "vllm")
 	SessionCostMicros int64    // cost in micro-USD (1 USD = 1_000_000 micros)
 }
 
@@ -295,6 +341,68 @@ func HashRequestContent(content string, toolNames []string) string {
 	}
 	h := sha256.Sum256([]byte(normalized))
 	return hex.EncodeToString(h[:16]) // 32 hex chars
+}
+
+// ShouldCacheSticky checks whether a request's context is large enough to
+// warrant pinning the model for prefix cache optimization. It estimates token
+// count from the raw message content (1 token ≈ 4 chars for English, 2 chars
+// for CJK/code — we use 3 as a conservative average).
+func ShouldCacheSticky(messages []MessageInfo) bool {
+	for _, m := range messages {
+		estTokens := len(m.Content) / 3
+		if estTokens >= stickyMessageTokenThreshold {
+			return true // Single large message (code paste, document)
+		}
+	}
+	// Check cumulative history
+	totalChars := 0
+	for _, m := range messages {
+		totalChars += len(m.Content)
+	}
+	return totalChars/3 >= stickyHistoryTokenThreshold
+}
+
+// MessageInfo is a minimal message representation for cache-sticky evaluation.
+type MessageInfo struct {
+	Role    string
+	Content string
+}
+
+// SetCacheSticky marks a session as cache-sticky for a specific provider.
+// The model is pinned until the provider's prefix cache TTL expires.
+func (s *Store) SetCacheSticky(sessionID, provider string) {
+	if !s.config.Enabled || sessionID == "" {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if entry, ok := s.sessions[sessionID]; ok {
+		if !entry.CacheSticky {
+			entry.CacheSticky = true
+			entry.CacheStickyAt = timeMillis()
+			entry.Provider = provider
+		}
+	}
+}
+
+// IsCacheSticky returns true if the session has an active cache-sticky pin
+// (i.e., the pin hasn't expired past the provider's prefix cache TTL).
+func (s *Store) IsCacheSticky(sessionID string) bool {
+	if !s.config.Enabled || sessionID == "" {
+		return false
+	}
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	entry, ok := s.sessions[sessionID]
+	if !ok || !entry.CacheSticky {
+		return false
+	}
+	// Expire sticky if idle longer than this provider's prefix cache TTL
+	ttl := CacheTTLForProvider(entry.Provider)
+	if timeMillis()-entry.LastUsedAt > ttl {
+		return false
+	}
+	return true
 }
 
 // Close stops the background cleanup goroutine.
