@@ -24,7 +24,7 @@ func DefaultRoutingConfig() RoutingConfig {
 				Fallback: []string{
 					"google/gemini-3-flash-preview",
 					"deepseek/deepseek-chat",
-					"nvidia/kimi-k2.5",
+					"moonshot/kimi-k2.5",
 					"google/gemini-3.1-flash-lite",
 					"google/gemini-2.5-flash-lite",
 					"openai/gpt-5.4-nano",
@@ -33,7 +33,7 @@ func DefaultRoutingConfig() RoutingConfig {
 				},
 			},
 			TierMedium: {
-				Primary: "nvidia/kimi-k2.5",
+				Primary: "moonshot/kimi-k2.5",
 				Fallback: []string{
 					"google/gemini-3-flash-preview",
 					"deepseek/deepseek-chat",
@@ -110,8 +110,9 @@ func DefaultRoutingConfig() RoutingConfig {
 		// Premium tier configs - best quality
 		PremiumTiers: map[Tier]TierConfig{
 			TierSimple: {
-				Primary: "nvidia/kimi-k2.5",
+				Primary: "moonshot/kimi-k2.6",
 				Fallback: []string{
+					"moonshot/kimi-k2.5",
 					"google/gemini-2.5-flash",
 					"anthropic/claude-haiku-4.5",
 					"google/gemini-2.5-flash-lite",
@@ -121,7 +122,8 @@ func DefaultRoutingConfig() RoutingConfig {
 			TierMedium: {
 				Primary: "openai/gpt-5.3-codex",
 				Fallback: []string{
-					"nvidia/kimi-k2.5",
+					"moonshot/kimi-k2.6",
+					"moonshot/kimi-k2.5",
 					"google/gemini-2.5-flash",
 					"google/gemini-2.5-pro",
 					"xai/grok-4-0709",
@@ -129,20 +131,22 @@ func DefaultRoutingConfig() RoutingConfig {
 				},
 			},
 			TierComplex: {
-				Primary: "anthropic/claude-opus-4.6",
+				Primary: "anthropic/claude-opus-4.7",
 				Fallback: []string{
-					"openai/gpt-5.4",
-					"openai/gpt-5.3-codex",
 					"anthropic/claude-opus-4.6",
 					"anthropic/claude-sonnet-4.6",
-					"google/gemini-3.1-pro",
-					"google/gemini-3-pro-preview",
-					"nvidia/kimi-k2.5",
+					"xai/grok-4-0709",
+					"moonshot/kimi-k2.6",
+					"moonshot/kimi-k2.5",
+					"openai/gpt-5.4",
+					"deepseek/deepseek-chat",
+					"free/qwen3-coder-480b",
 				},
 			},
 			TierReasoning: {
 				Primary: "anthropic/claude-sonnet-4.6",
 				Fallback: []string{
+					"anthropic/claude-opus-4.7",
 					"anthropic/claude-opus-4.6",
 					"xai/grok-4-1-fast-reasoning",
 					"openai/o4-mini",
@@ -156,14 +160,15 @@ func DefaultRoutingConfig() RoutingConfig {
 			TierSimple: {
 				Primary: "openai/gpt-4o-mini",
 				Fallback: []string{
-					"nvidia/kimi-k2.5",
+					"moonshot/kimi-k2.5",
 					"anthropic/claude-haiku-4.5",
 					"xai/grok-4-1-fast-non-reasoning",
 				},
 			},
 			TierMedium: {
-				Primary: "nvidia/kimi-k2.5",
+				Primary: "moonshot/kimi-k2.5",
 				Fallback: []string{
+					"moonshot/kimi-k2.6",
 					"xai/grok-4-1-fast-non-reasoning",
 					"openai/gpt-4o-mini",
 					"anthropic/claude-haiku-4.5",
@@ -173,15 +178,20 @@ func DefaultRoutingConfig() RoutingConfig {
 			TierComplex: {
 				Primary: "anthropic/claude-sonnet-4.6",
 				Fallback: []string{
+					"anthropic/claude-opus-4.7",
 					"anthropic/claude-opus-4.6",
-					"google/gemini-3.1-pro",
 					"xai/grok-4-0709",
+					"moonshot/kimi-k2.6",
+					"moonshot/kimi-k2.5",
 					"openai/gpt-5.4",
+					"deepseek/deepseek-chat",
+					"free/qwen3-coder-480b",
 				},
 			},
 			TierReasoning: {
 				Primary: "anthropic/claude-sonnet-4.6",
 				Fallback: []string{
+					"anthropic/claude-opus-4.7",
 					"anthropic/claude-opus-4.6",
 					"xai/grok-4-1-fast-reasoning",
 					"deepseek/deepseek-reasoner",

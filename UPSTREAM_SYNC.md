@@ -2,7 +2,7 @@
 
 **Upstream**: [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript)
 **This repo**: [DOS/DOSRouter](https://github.com/DOS/DOSRouter) (Go port)
-**Last synced**: v0.12.146 (2026-04-11)
+**Last synced**: v0.12.161 (2026-04-22)
 
 ## Sync Workflow
 
@@ -57,6 +57,27 @@ These upstream areas are excluded (TS/npm-specific):
 | v0.12.25 | DONE | Docs refresh | Architecture, configuration, troubleshooting updated |
 | v0.12.24 | DONE | Preserve user allowlist on restart | InjectModelsConfig() merges user entries |
 | v0.12.10 | DONE | /stats clear command | Ported as `dosrouter stats clear` CLI command |
+
+### 2026-04-22 - Sync to v0.12.161
+
+| Release | Status | Summary | Notes |
+|---------|--------|---------|-------|
+| v0.12.161 | DONE | De-Gemini Anthropic-primary fallbacks | Correlated 503s. Removed google/gemini-* from PremiumTiers[Complex] + AgenticTiers[Complex] chains |
+| v0.12.160 | DONE | Free-tier 13→8 realign + Kimi Moonshot-primary | Retired nemotron×3 + mistral-large-3 + devstral-2; added qwen3-next-80b-a3b-thinking + mistral-small-4-119b; flipped kimi-k2.5 primary to moonshot, marked nvidia/kimi-k2.5 Deprecated; added K2.6 ($0.95/$4) Moonshot-only |
+| v0.12.159 | SKIP | Market data partner tools + x402 pricing | Needs paid-proxy subsystem (relative proxyPath), not present in DOSRouter partners module |
+| v0.12.158 | SKIP | TS plugin lifecycle refactor | TS-only |
+| v0.12.157 | SKIP | Prettier formatting | TS-only |
+| v0.12.156 | DONE | Opus 4.7 flagship aliases | Added opus/opus-4/opus-4.7 → anthropic/claude-opus-4.7 redirect table |
+| v0.12.155 | DONE | Grok 4.20 family (2M ctx) | Added reasoning + non-reasoning + multi-agent variants, $2/$6, 2M context |
+| v0.12.153 | DONE | Claude Opus 4.7 | Added model def, kept 4.6 as fallback, promoted 4.7 as PremiumTiers[Complex].Primary |
+| v0.12.149 | DONE | Explicit-pin no free fallback | Already DOSRouter default behavior (proxy.go uses [resolvedModel] when decision==nil) |
+| v0.12.148 | SKIP | TS plugin config scaffolding | TS-only |
+
+**Config diff summary:**
+- `router/config.go`: 6 × `nvidia/kimi-k2.5` → `moonshot/kimi-k2.5` across Tiers/PremiumTiers/AgenticTiers
+- `PremiumTiers[Complex].Primary`: `claude-opus-4.6` → `claude-opus-4.7`
+- `PremiumTiers[Simple].Primary`: `nvidia/kimi-k2.5` → `moonshot/kimi-k2.6`
+- `PremiumTiers[Complex].Fallback` + `AgenticTiers[Complex].Fallback`: stripped `google/gemini-*`, added moonshot K2.6/K2.5, `free/qwen3-coder-480b` backstop
 
 ### 2026-04-11 - Full port expansion
 - Added: wallet module (EVM key derivation, DOS Chain/Base/Avalanche)
