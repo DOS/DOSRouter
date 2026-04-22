@@ -22,6 +22,7 @@ import (
 	"github.com/DOS/DOSRouter/journal"
 	"github.com/DOS/DOSRouter/logger"
 	"github.com/DOS/DOSRouter/models"
+	"github.com/DOS/DOSRouter/partners"
 	"github.com/DOS/DOSRouter/retry"
 	"github.com/DOS/DOSRouter/router"
 	"github.com/DOS/DOSRouter/session"
@@ -151,6 +152,10 @@ func (s *Server) ListenAndServe() error {
 	mux.HandleFunc("/health", s.handleHealth)
 	mux.HandleFunc("/debug", s.handleDebug)
 	mux.HandleFunc("/cache", s.handleCacheStats)
+
+	// Self-hosted market data endpoints backed by Pyth Network.
+	// Registers: /v1/stocks/*, /v1/crypto/price/*, /v1/fx/price/*, /v1/commodity/price/*.
+	partners.NewMarketHandler().Routes(mux)
 
 	addr := fmt.Sprintf(":%d", s.config.Port)
 	log.Printf("DOSRouter proxy listening on %s (upstream: %s)", addr, s.config.UpstreamBase)

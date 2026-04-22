@@ -2,7 +2,7 @@
 
 **Upstream**: [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript)
 **This repo**: [DOS/DOSRouter](https://github.com/DOS/DOSRouter) (Go port)
-**Last synced**: v0.12.161 (2026-04-22)
+**Last synced**: v0.12.161 (2026-04-22, partial — see sync log)
 
 ## Sync Workflow
 
@@ -64,7 +64,7 @@ These upstream areas are excluded (TS/npm-specific):
 |---------|--------|---------|-------|
 | v0.12.161 | DONE | De-Gemini Anthropic-primary fallbacks | Correlated 503s. Removed google/gemini-* from PremiumTiers[Complex] + AgenticTiers[Complex] chains |
 | v0.12.160 | DONE | Free-tier 13→8 realign + Kimi Moonshot-primary | Retired nemotron×3 + mistral-large-3 + devstral-2; added qwen3-next-80b-a3b-thinking + mistral-small-4-119b; flipped kimi-k2.5 primary to moonshot, marked nvidia/kimi-k2.5 Deprecated; added K2.6 ($0.95/$4) Moonshot-only |
-| v0.12.159 | SKIP | Market data partner tools + x402 pricing | Needs paid-proxy subsystem (relative proxyPath), not present in DOSRouter partners module |
+| v0.12.159 | PARTIAL | Market data partner tools + x402 pricing | Ported 6/9 tools as self-hosted Pyth Hermes endpoints (stock price/history/list, crypto/fx/commodity price). See follow-up entry below. 3 tools deferred to roadmap. |
 | v0.12.158 | SKIP | TS plugin lifecycle refactor | TS-only |
 | v0.12.157 | SKIP | Prettier formatting | TS-only |
 | v0.12.156 | DONE | Opus 4.7 flagship aliases | Added opus/opus-4/opus-4.7 → anthropic/claude-opus-4.7 redirect table |
@@ -72,6 +72,40 @@ These upstream areas are excluded (TS/npm-specific):
 | v0.12.153 | DONE | Claude Opus 4.7 | Added model def, kept 4.6 as fallback, promoted 4.7 as PremiumTiers[Complex].Primary |
 | v0.12.149 | DONE | Explicit-pin no free fallback | Already DOSRouter default behavior (proxy.go uses [resolvedModel] when decision==nil) |
 | v0.12.148 | SKIP | TS plugin config scaffolding | TS-only |
+
+### 2026-04-22 - Market data partners self-hosted (v0.12.159 follow-up)
+
+Rather than proxy v0.12.159's 9 market-data partners through BlockRun's
+x402-paid backend, DOSRouter serves 6 of them directly from the public
+Pyth Network Hermes feed. Zero upstream fee, zero API key, revenue stays
+with the DOS operator if a fee layer is added later.
+
+| Tool | Source | Status |
+|------|--------|--------|
+| `stock_price`, `stock_history`, `stock_list` | Pyth Hermes (`hermes.pyth.network/v2/price_feeds` + `/v2/updates/price/latest`) + Benchmarks (`benchmarks.pyth.network/v1/shims/tradingview/history`) | PORTED |
+| `crypto_price`, `fx_price`, `commodity_price` | Pyth Hermes | PORTED |
+| `predexon_smart_activity`, `predexon_wallet_pnl`, `predexon_matching_markets` | Predexon | ROADMAP — needs vendor contract or on-chain Polymarket indexer |
+| `x_users_lookup` | Twitter/X API v2 | ROADMAP — needs paid Twitter API tier |
+
+New files:
+- `partners/pyth.go` — Hermes + Benchmarks HTTP client (search feeds, latest price, OHLC bars).
+- `partners/market.go` — six `/v1/stocks|crypto|fx|commodity/*` handlers.
+- `partners/market_test.go` — pure-logic unit tests.
+- `docs/market-data-partners.md` — endpoint reference + coverage notes.
+
+Schema changes:
+- `PartnerServiceDefinition`: added `ProxyPath` field (routes tool via
+  local DOSRouter proxy instead of absolute `BaseURL`).
+- `BuildPartnerTools(apiKey, localProxyBase)` — signature extended so
+  ProxyPath services know where to reach the local proxy.
+
+Out of scope for this pass:
+- **x402 signing on paid endpoints** — DOS Chain USDC not deployed, no
+  facilitator URL available. Paid tools remain free at this layer;
+  revenue model to be revisited once DOS Chain token lands.
+- **Non-US stock coverage** — Pyth's equity feed is US-heavy. HK/JP/KR/EU
+  requests return 404 for tickers Pyth doesn't index. Deferred to a
+  future release that layers a secondary data provider.
 
 **Config diff summary:**
 - `router/config.go`: 6 × `nvidia/kimi-k2.5` → `moonshot/kimi-k2.5` across Tiers/PremiumTiers/AgenticTiers

@@ -19,18 +19,20 @@ type PartnerToolDefinition struct {
 }
 
 // BuildPartnerTools constructs tool definitions for every registered partner
-// service, binding each tool's execute function to make authenticated HTTP
-// requests using the provided apiKey.
-func BuildPartnerTools(apiKey string) []PartnerToolDefinition {
+// service. Absolute-URL services (BaseURL set) are called directly with the
+// provided apiKey. Local-proxy services (ProxyPath set) are routed through
+// localProxyBase (e.g. "http://127.0.0.1:8402") and hit self-hosted endpoints
+// — no upstream API key required.
+func BuildPartnerTools(apiKey, localProxyBase string) []PartnerToolDefinition {
 	tools := make([]PartnerToolDefinition, 0, len(PartnerServices))
 	for _, svc := range PartnerServices {
-		tools = append(tools, buildTool(svc, apiKey))
+		tools = append(tools, buildTool(svc, apiKey, localProxyBase))
 	}
 	return tools
 }
 
 // buildTool creates a single PartnerToolDefinition from a service definition.
-func buildTool(svc PartnerServiceDefinition, apiKey string) PartnerToolDefinition {
+func buildTool(svc PartnerServiceDefinition, apiKey, localProxyBase string) PartnerToolDefinition {
 	schema := buildInputSchema(svc.Params)
 
 	return PartnerToolDefinition{
@@ -38,9 +40,71 @@ func buildTool(svc PartnerServiceDefinition, apiKey string) PartnerToolDefinitio
 		Description: svc.Description,
 		InputSchema: schema,
 		Execute: func(args map[string]any) (any, error) {
+			if svc.ProxyPath != "" {
+				return executeLocalProxy(svc, localProxyBase, args)
+			}
 			return executeService(svc, apiKey, args)
 		},
 	}
+}
+
+// executeLocalProxy calls the DOSRouter local proxy for a self-hosted
+// partner endpoint. Path parameters like {symbol} are substituted; remaining
+// params are appended as query string. No Authorization header is sent —
+// these endpoints are served in-process by proxy.go.
+func executeLocalProxy(svc PartnerServiceDefinition, proxyBase string, args map[string]any) (any, error) {
+	if proxyBase == "" {
+		return nil, fmt.Errorf("partners: ProxyPath service %s requires a local proxy base URL", svc.ID)
+	}
+	path := svc.ProxyPath
+	usedInPath := make(map[string]bool)
+	for _, p := range svc.Params {
+		placeholder := "{" + p.Name + "}"
+		if strings.Contains(path, placeholder) {
+			val := paramString(args, p)
+			path = strings.ReplaceAll(path, placeholder, url.PathEscape(val))
+			usedInPath[p.Name] = true
+		}
+	}
+
+	q := url.Values{}
+	for _, p := range svc.Params {
+		if usedInPath[p.Name] {
+			continue
+		}
+		val := paramString(args, p)
+		if val != "" {
+			q.Set(p.Name, val)
+		}
+	}
+	full := strings.TrimRight(proxyBase, "/") + path
+	if encoded := q.Encode(); encoded != "" {
+		full += "?" + encoded
+	}
+
+	req, err := http.NewRequest(string(svc.Method), full, nil)
+	if err != nil {
+		return nil, fmt.Errorf("partners: build local proxy request: %w", err)
+	}
+	req.Header.Set("Accept", "application/json")
+
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("partners: local proxy %s: %w", svc.ID, err)
+	}
+	defer resp.Body.Close()
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("partners: read local proxy response %s: %w", svc.ID, err)
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return nil, fmt.Errorf("partners: %s returned HTTP %d: %s", svc.ID, resp.StatusCode, string(body))
+	}
+	var parsed any
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		return string(body), nil
+	}
+	return parsed, nil
 }
 
 // buildInputSchema produces a JSON Schema "object" descriptor from the
