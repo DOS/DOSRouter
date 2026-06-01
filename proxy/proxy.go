@@ -555,6 +555,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 					// (upstream v0.12.165/166/169): blank delta.content when the
 					// chunk carries tool_calls or finish_reason=tool_calls, so
 					// planning prose is not forwarded to chat channels.
+					mutated := false
 					if choices, ok := chunk["choices"].([]interface{}); ok {
 						for _, c := range choices {
 							choice, ok := c.(map[string]interface{})
@@ -565,6 +566,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 								if delta, ok := choice["delta"].(map[string]interface{}); ok {
 									if s, _ := delta["content"].(string); s != "" {
 										delta["content"] = ""
+										mutated = true
 									}
 								}
 							}
@@ -573,9 +575,15 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 					// Inject actual routed model into every chunk (upstream v0.12.64)
 					if decision != nil {
 						chunk["model"] = resolvedModel
+						mutated = true
 					}
-					if b, err := json.Marshal(chunk); err == nil {
-						line = "data: " + string(b)
+					// Only re-marshal when we actually changed the chunk. Re-encoding
+					// every pass-through chunk would silently rewrite provider-specific
+					// extension fields / key order on non-routed requests.
+					if mutated {
+						if b, err := json.Marshal(chunk); err == nil {
+							line = "data: " + string(b)
+						}
 					}
 				}
 			}

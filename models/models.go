@@ -59,6 +59,7 @@ var ModelAliases = map[string]string{
 	"anthropic/claude-opus-4-8": "anthropic/claude-opus-4.8",
 	"anthropic/claude-opus-4-7": "anthropic/claude-opus-4.7",
 	"anthropic/claude-opus-4-6": "anthropic/claude-opus-4.6",
+	// 4.5 skips 4.6/4.7 straight to the 4.8 flagship (upstream behavior).
 	"anthropic/claude-opus-4.5": "anthropic/claude-opus-4.8",
 
 	// OpenAI — gpt5 bare alias resolves to the 5.5 flagship (upstream v0.12.168).
@@ -71,8 +72,10 @@ var ModelAliases = map[string]string{
 	"gpt-5.4-mini":              "openai/gpt-5.4-mini",
 	"openai-codex/gpt-5.4-mini": "openai/gpt-5.4-mini",
 	"codex":                     "openai/gpt-5.3-codex",
-	"o1":                        "openai/o1",
-	"o3":                        "openai/o3",
+	// o1 has no catalog ModelDef (sunset); redirect to o3 so the alias still
+	// resolves to a model with pricing + reasoning metadata.
+	"o1": "openai/o3",
+	"o3": "openai/o3",
 
 	// DeepSeek
 	"deepseek":      "deepseek/deepseek-chat",
