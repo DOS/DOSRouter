@@ -551,12 +551,31 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 							streamOutputTok = int(ct)
 						}
 					}
+					// Strip tool-call planning prose from streamed delta content
+					// (upstream v0.12.165/166/169): blank delta.content when the
+					// chunk carries tool_calls or finish_reason=tool_calls, so
+					// planning prose is not forwarded to chat channels.
+					if choices, ok := chunk["choices"].([]interface{}); ok {
+						for _, c := range choices {
+							choice, ok := c.(map[string]interface{})
+							if !ok {
+								continue
+							}
+							if choiceEndsWithToolCalls(choice) {
+								if delta, ok := choice["delta"].(map[string]interface{}); ok {
+									if s, _ := delta["content"].(string); s != "" {
+										delta["content"] = ""
+									}
+								}
+							}
+						}
+					}
 					// Inject actual routed model into every chunk (upstream v0.12.64)
 					if decision != nil {
 						chunk["model"] = resolvedModel
-						if b, err := json.Marshal(chunk); err == nil {
-							line = "data: " + string(b)
-						}
+					}
+					if b, err := json.Marshal(chunk); err == nil {
+						line = "data: " + string(b)
 					}
 				}
 			}
@@ -637,6 +656,27 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			if json.Unmarshal(respBody, &parsed) == nil {
 				// Overwrite model with actual resolved model
 				parsed["model"] = resolvedModel
+				// Strip tool-call planning prose from content (upstream
+				// v0.12.165/166): some providers (notably Kimi) emit planning text
+				// in message.content alongside tool_calls, or flag the turn via
+				// finish_reason=tool_calls. Tool execution only needs tool_calls;
+				// forwarding the prose pollutes chat channels. Blank the content
+				// when the turn ends in tool calls.
+				if choices, ok := parsed["choices"].([]interface{}); ok {
+					for _, c := range choices {
+						choice, ok := c.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						if choiceEndsWithToolCalls(choice) {
+							if msg, ok := choice["message"].(map[string]interface{}); ok {
+								if s, _ := msg["content"].(string); s != "" {
+									msg["content"] = ""
+								}
+							}
+						}
+					}
+				}
 				// Inject cost breakdown if usage tokens available
 				if usage, ok := parsed["usage"].(map[string]interface{}); ok {
 					inputTok, _ := usage["prompt_tokens"].(float64)
@@ -922,6 +962,32 @@ func (s *Server) handleImageGen(w http.ResponseWriter, r *http.Request) {
 		Tier:      "IMAGE",
 		Status:    fmt.Sprintf("%d", resp.StatusCode),
 	})
+}
+
+// choiceEndsWithToolCalls reports whether a parsed choice object (streaming or
+// non-streaming) represents a tool-call turn: either finish_reason is
+// "tool_calls", or a non-empty tool_calls array is present on message or delta.
+// Used to suppress planning prose in content (upstream v0.12.165/166/169).
+func choiceEndsWithToolCalls(choice map[string]interface{}) bool {
+	if fr, _ := choice["finish_reason"].(string); fr == "tool_calls" {
+		return true
+	}
+	hasToolCalls := func(o map[string]interface{}) bool {
+		if o == nil {
+			return false
+		}
+		if tc, ok := o["tool_calls"].([]interface{}); ok && len(tc) > 0 {
+			return true
+		}
+		return false
+	}
+	if msg, ok := choice["message"].(map[string]interface{}); ok && hasToolCalls(msg) {
+		return true
+	}
+	if delta, ok := choice["delta"].(map[string]interface{}); ok && hasToolCalls(delta) {
+		return true
+	}
+	return false
 }
 
 // isEmptyTurn detects a degraded "empty turn" response: content is empty,
