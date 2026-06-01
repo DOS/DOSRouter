@@ -9,10 +9,10 @@ func DefaultRoutingConfig() RoutingConfig {
 
 		Classifier: ClassifierConfig{
 			LLMModel:              "google/gemini-2.5-flash",
-			LLMMaxTokens:         10,
-			LLMTemperature:       0,
+			LLMMaxTokens:          10,
+			LLMTemperature:        0,
 			PromptTruncationChars: 500,
-			CacheTTLMs:           3_600_000, // 1 hour
+			CacheTTLMs:            3_600_000, // 1 hour
 		},
 
 		Scoring: defaultScoringConfig(),
@@ -33,8 +33,11 @@ func DefaultRoutingConfig() RoutingConfig {
 				},
 			},
 			TierMedium: {
-				Primary: "moonshot/kimi-k2.5",
+				// K2.6 promoted to primary 2026-05-02 after BlockRun hid K2.5 from
+				// its UI; K2.5 kept as graceful-degradation backstop (upstream v0.12.174).
+				Primary: "moonshot/kimi-k2.6",
 				Fallback: []string{
+					"moonshot/kimi-k2.5",
 					"google/gemini-3-flash-preview",
 					"deepseek/deepseek-chat",
 					"google/gemini-2.5-flash",
@@ -131,10 +134,14 @@ func DefaultRoutingConfig() RoutingConfig {
 				},
 			},
 			TierComplex: {
-				Primary: "anthropic/claude-opus-4.7",
+				// Opus 4.8 is the newest flagship (same $5/$25 as 4.7); 4.7 stays
+				// as the in-family hot-swap first fallback (upstream v0.12.198).
+				Primary: "anthropic/claude-opus-4.8",
 				Fallback: []string{
+					"anthropic/claude-opus-4.7",
 					"anthropic/claude-opus-4.6",
 					"anthropic/claude-sonnet-4.6",
+					"openai/gpt-5.5",
 					"xai/grok-4-0709",
 					"moonshot/kimi-k2.6",
 					"moonshot/kimi-k2.5",
@@ -146,6 +153,7 @@ func DefaultRoutingConfig() RoutingConfig {
 			TierReasoning: {
 				Primary: "anthropic/claude-sonnet-4.6",
 				Fallback: []string{
+					"anthropic/claude-opus-4.8",
 					"anthropic/claude-opus-4.7",
 					"anthropic/claude-opus-4.6",
 					"xai/grok-4-1-fast-reasoning",
@@ -160,15 +168,17 @@ func DefaultRoutingConfig() RoutingConfig {
 			TierSimple: {
 				Primary: "openai/gpt-4o-mini",
 				Fallback: []string{
-					"moonshot/kimi-k2.5",
+					"moonshot/kimi-k2.6",
 					"anthropic/claude-haiku-4.5",
 					"xai/grok-4-1-fast-non-reasoning",
 				},
 			},
 			TierMedium: {
-				Primary: "moonshot/kimi-k2.5",
+				// K2.6 is the featured Moonshot flagship; bumped from K2.5 after
+				// BlockRun hid K2.5 from its UI 2026-04-28 (upstream v0.12.174).
+				Primary: "moonshot/kimi-k2.6",
 				Fallback: []string{
-					"moonshot/kimi-k2.6",
+					"moonshot/kimi-k2.5",
 					"xai/grok-4-1-fast-non-reasoning",
 					"openai/gpt-4o-mini",
 					"anthropic/claude-haiku-4.5",
@@ -178,8 +188,10 @@ func DefaultRoutingConfig() RoutingConfig {
 			TierComplex: {
 				Primary: "anthropic/claude-sonnet-4.6",
 				Fallback: []string{
+					"anthropic/claude-opus-4.8",
 					"anthropic/claude-opus-4.7",
 					"anthropic/claude-opus-4.6",
+					"openai/gpt-5.5",
 					"xai/grok-4-0709",
 					"moonshot/kimi-k2.6",
 					"moonshot/kimi-k2.5",
@@ -191,6 +203,7 @@ func DefaultRoutingConfig() RoutingConfig {
 			TierReasoning: {
 				Primary: "anthropic/claude-sonnet-4.6",
 				Fallback: []string{
+					"anthropic/claude-opus-4.8",
 					"anthropic/claude-opus-4.7",
 					"anthropic/claude-opus-4.6",
 					"xai/grok-4-1-fast-reasoning",
