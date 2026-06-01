@@ -2,7 +2,7 @@
 
 **Upstream**: [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript)
 **This repo**: [DOS/DOSRouter](https://github.com/DOS/DOSRouter) (Go port)
-**Last synced**: v0.12.161 (2026-04-22, partial — see sync log)
+**Last synced**: v0.12.199 (2026-06-01, core ported — partner skills deferred, see sync log)
 
 ## Sync Workflow
 
@@ -29,6 +29,42 @@ These upstream areas are excluded (TS/npm-specific):
 - Node.js/npm-specific (prettier, package.json, CI)
 
 ## Sync Log
+
+### 2026-06-01 - Sync to v0.12.199 (core ported, partner skills deferred)
+
+Upstream stopped cutting GitHub *releases* after v0.12.159 but kept *tagging*
+through v0.12.199. Diffed `v0.12.161...v0.12.199` (28 tags) by commit.
+
+**Ported (Go core):**
+
+| Upstream | Status | Summary |
+|----------|--------|---------|
+| v0.12.198 | DONE | Claude Opus 4.8 flagship — model def + aliases (bare/forward opus → 4.8, pins keep version); PremiumTiers[Complex].Primary 4.7 → 4.8, 4.7 + gpt-5.5 into fallback; opus-4.8 prepended to Reasoning/Agentic fallbacks |
+| v0.12.168 | DONE | GPT-5.5 flagship — model def ($5/$30, 1.05M ctx) + `gpt5` alias → 5.5; added to Complex fallback chains |
+| v0.12.191 | DONE | DeepSeek V4 Flash (free) — model def + V3.2/V4-Pro delisted (NVIDIA hung 2026-04-30) → deprecated FallbackModel redirects |
+| v0.12.171/174 | DONE | Kimi K2.6 promoted to bare-alias flagship (K2.5 hidden in BlockRun UI 2026-04-28); K2.5 pin-only; auto+agentic MEDIUM primary K2.5 → K2.6 with K2.5 backstop |
+| v0.12.182 | DONE | Reasoning-aware per-model timeout — reasoning models 180s (cold-start first-token), others 60s; cancel-context + AfterFunc, stops timer on success so streams aren't cut. `perModelTimeout()` + test |
+| v0.12.165/166/169 | DONE | Suppress tool-call planning prose in content — blank message/delta content when finish_reason==tool_calls or tool_calls array present (Kimi planning prose leak); both SSE + non-streaming paths. `choiceEndsWithToolCalls()` + test |
+| v0.12.154 | ALREADY | Degenerate/empty-turn retry — DOSRouter already has `isEmptyTurn` fallback |
+| v0.12.167 | DONE | Model registry alignment — covered by the roster updates above |
+
+**Deferred (need vendor / x402 facilitator) — ROADMAP:**
+
+| Upstream | Status | Reason |
+|----------|--------|--------|
+| v0.12.180/181/186/187 | ROADMAP | Predexon prediction-market tools — shipped upstream as `skills/predexon/SKILL.md` (OpenClaw skill markdown). DOSRouter is a standalone Go binary, not an OpenClaw skill host; needs a Predexon vendor contract regardless. Same class as the v0.12.159 market-data partners (6/9 self-hosted via Pyth, 3 deferred). |
+| v0.12.192 | ROADMAP | Phone/voice (Twilio lookup + Bland.ai outbound) — paid endpoints via `proxyPaidApiRequest`/payFetch (x402). Blocked on the same DOS Chain USDC + facilitator URL gap already tracked. |
+| v0.12.193/194/195 | ROADMAP | Surf crypto-data + Seedance per-token pricing — also `proxyPaidApiRequest` (x402 paid) + skill markdown. Defer with phone/voice until the facilitator lands. |
+| v0.12.179/190 | ROADMAP | gpt-image-2 polling + `/imagegen → /cr-imagegen` rename — image-gen is a passthrough stub in DOSRouter; revisit when image gen is productized. |
+
+**Skipped (TS-only / not applicable to Go):**
+
+| Upstream | Reason |
+|----------|--------|
+| v0.12.163, 183, 184, 185, 196, 197 | OpenClaw plugin lifecycle / npm install scripts / updater size-drop recovery — TS plugin runtime, no Go equivalent (DOSRouter ships a binary) |
+| v0.12.188 | `BLOCKRUN_WEB_SEARCH=off` opt-out — DOSRouter has no web-search feature |
+| v0.12.158, 169 (prettier), dist rebuilds, dep bumps, README/marketing, OKX wallet (reverted upstream) | TS-only / cosmetic / upstream-reverted |
+| v0.12.172/175/176/177 | OpenClaw model-picker filtering (`TOP_MODELS`, allowlist prune on plugin load) — picker UX is an OpenClaw-plugin concern; DOSRouter exposes `/v1/models` directly |
 
 ### 2026-04-07 - Initial port (v0.12.106)
 - Ported: Full 1:1 port of all routing modules

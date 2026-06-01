@@ -6,6 +6,7 @@ package proxy
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,6 +32,24 @@ import (
 
 // Version is set at build time or defaults to "dev".
 var Version = "1.0.0"
+
+// Per-model attempt timeouts (upstream v0.12.182). Reasoning models get a
+// longer window because first-token cold-start can take 60-120s (DeepSeek V4
+// Pro, Claude opus adaptive thinking, GPT-5 reasoning_effort=high); everything
+// else falls through to the next model after 60s.
+const (
+	perModelTimeoutNonReasoning = 60 * time.Second
+	perModelTimeoutReasoning    = 180 * time.Second
+)
+
+// perModelTimeout returns the per-attempt timeout for a resolved model ID,
+// using the longer reasoning window for reasoning-capable models.
+func perModelTimeout(modelID string) time.Duration {
+	if models.IsReasoningModel(modelID) {
+		return perModelTimeoutReasoning
+	}
+	return perModelTimeoutNonReasoning
+}
 
 // Config controls the proxy server behavior.
 type Config struct {
@@ -61,9 +80,9 @@ type Server struct {
 	// Deferred startup for OpenClaw plugin config (upstream v0.12.142)
 	// When OpenClaw calls Register() twice, the first call has empty pluginConfig.
 	// We defer proxy startup by 250ms to allow the second call with real config.
-	startMu      sync.Mutex
-	deferTimer   *time.Timer
-	registered   bool
+	startMu    sync.Mutex
+	deferTimer *time.Timer
+	registered bool
 }
 
 // New creates a new proxy server.
@@ -412,12 +431,32 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	var attempts []attemptResult
 	var resp *http.Response
+	// cancelResp cancels the context of the SUCCESSFUL attempt; it is deferred
+	// after the loop so the chosen response body stays streamable until the
+	// handler returns, then its resources are released.
+	var cancelResp context.CancelFunc
 
 	for _, tryModel := range fallbackChain {
 		req.Model = tryModel
 		tryBody, _ := json.Marshal(req)
-		tryResp, tryErr := retry.Do(r.Context(), makeReqFor(tryBody), retry.WithClient(s.httpClient))
+		// Per-model timeout (upstream v0.12.182): reasoning models get 3min for
+		// cold-start first-token (DeepSeek V4 Pro / Claude opus thinking / GPT-5
+		// reasoning_effort=high can take 60-120s); non-reasoning get 60s. On
+		// timeout the loop falls through to the next model rather than failing.
+		//
+		// Implemented as cancel-context + AfterFunc (the Go equivalent of
+		// setTimeout/clearTimeout): the timer fires cancel() only if the attempt
+		// has not produced a response yet. On success we Stop() the timer so the
+		// long-lived stream is NOT cut at the per-model bound — it then runs under
+		// the parent request context / client timeout, matching upstream's
+		// clearTimeout-on-success behavior. Derived from r.Context() so a client
+		// disconnect still cancels the in-flight attempt.
+		attemptCtx, cancelAttempt := context.WithCancel(r.Context())
+		timer := time.AfterFunc(perModelTimeout(tryModel), cancelAttempt)
+		tryResp, tryErr := retry.Do(attemptCtx, makeReqFor(tryBody), retry.WithClient(s.httpClient))
 		if tryErr != nil {
+			timer.Stop()
+			cancelAttempt()
 			attempts = append(attempts, attemptResult{model: tryModel, reason: tryErr.Error()})
 			continue
 		}
@@ -425,6 +464,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		if tryResp.StatusCode >= 400 {
 			errBody, _ := io.ReadAll(tryResp.Body)
 			tryResp.Body.Close()
+			timer.Stop()
+			cancelAttempt()
 			reason := fmt.Sprintf("HTTP %d", tryResp.StatusCode)
 			if len(errBody) > 0 {
 				var errObj struct {
@@ -439,6 +480,10 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			attempts = append(attempts, attemptResult{model: tryModel, reason: reason})
 			continue
 		}
+		// Success: stop the per-model timer so streaming is not cut at the bound,
+		// and keep the context alive (cancel deferred after the loop).
+		timer.Stop()
+		cancelResp = cancelAttempt
 		resp = tryResp
 		resolvedModel = tryModel
 		if tryModel != fallbackChain[0] {
@@ -446,6 +491,9 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-DOSRouter-Model", tryModel)
 		}
 		break
+	}
+	if cancelResp != nil {
+		defer cancelResp()
 	}
 
 	if resp == nil {
@@ -503,9 +551,36 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 							streamOutputTok = int(ct)
 						}
 					}
+					// Strip tool-call planning prose from streamed delta content
+					// (upstream v0.12.165/166/169): blank delta.content when the
+					// chunk carries tool_calls or finish_reason=tool_calls, so
+					// planning prose is not forwarded to chat channels.
+					mutated := false
+					if choices, ok := chunk["choices"].([]interface{}); ok {
+						for _, c := range choices {
+							choice, ok := c.(map[string]interface{})
+							if !ok {
+								continue
+							}
+							if choiceEndsWithToolCalls(choice) {
+								if delta, ok := choice["delta"].(map[string]interface{}); ok {
+									if s, _ := delta["content"].(string); s != "" {
+										delta["content"] = ""
+										mutated = true
+									}
+								}
+							}
+						}
+					}
 					// Inject actual routed model into every chunk (upstream v0.12.64)
 					if decision != nil {
 						chunk["model"] = resolvedModel
+						mutated = true
+					}
+					// Only re-marshal when we actually changed the chunk. Re-encoding
+					// every pass-through chunk would silently rewrite provider-specific
+					// extension fields / key order on non-routed requests.
+					if mutated {
 						if b, err := json.Marshal(chunk); err == nil {
 							line = "data: " + string(b)
 						}
@@ -589,6 +664,27 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			if json.Unmarshal(respBody, &parsed) == nil {
 				// Overwrite model with actual resolved model
 				parsed["model"] = resolvedModel
+				// Strip tool-call planning prose from content (upstream
+				// v0.12.165/166): some providers (notably Kimi) emit planning text
+				// in message.content alongside tool_calls, or flag the turn via
+				// finish_reason=tool_calls. Tool execution only needs tool_calls;
+				// forwarding the prose pollutes chat channels. Blank the content
+				// when the turn ends in tool calls.
+				if choices, ok := parsed["choices"].([]interface{}); ok {
+					for _, c := range choices {
+						choice, ok := c.(map[string]interface{})
+						if !ok {
+							continue
+						}
+						if choiceEndsWithToolCalls(choice) {
+							if msg, ok := choice["message"].(map[string]interface{}); ok {
+								if s, _ := msg["content"].(string); s != "" {
+									msg["content"] = ""
+								}
+							}
+						}
+					}
+				}
 				// Inject cost breakdown if usage tokens available
 				if usage, ok := parsed["usage"].(map[string]interface{}); ok {
 					inputTok, _ := usage["prompt_tokens"].(float64)
@@ -874,6 +970,32 @@ func (s *Server) handleImageGen(w http.ResponseWriter, r *http.Request) {
 		Tier:      "IMAGE",
 		Status:    fmt.Sprintf("%d", resp.StatusCode),
 	})
+}
+
+// choiceEndsWithToolCalls reports whether a parsed choice object (streaming or
+// non-streaming) represents a tool-call turn: either finish_reason is
+// "tool_calls", or a non-empty tool_calls array is present on message or delta.
+// Used to suppress planning prose in content (upstream v0.12.165/166/169).
+func choiceEndsWithToolCalls(choice map[string]interface{}) bool {
+	if fr, _ := choice["finish_reason"].(string); fr == "tool_calls" {
+		return true
+	}
+	hasToolCalls := func(o map[string]interface{}) bool {
+		if o == nil {
+			return false
+		}
+		if tc, ok := o["tool_calls"].([]interface{}); ok && len(tc) > 0 {
+			return true
+		}
+		return false
+	}
+	if msg, ok := choice["message"].(map[string]interface{}); ok && hasToolCalls(msg) {
+		return true
+	}
+	if delta, ok := choice["delta"].(map[string]interface{}); ok && hasToolCalls(delta) {
+		return true
+	}
+	return false
 }
 
 // isEmptyTurn detects a degraded "empty turn" response: content is empty,
