@@ -6,6 +6,7 @@ package proxy
 import (
 	"bufio"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -31,6 +32,24 @@ import (
 
 // Version is set at build time or defaults to "dev".
 var Version = "1.0.0"
+
+// Per-model attempt timeouts (upstream v0.12.182). Reasoning models get a
+// longer window because first-token cold-start can take 60-120s (DeepSeek V4
+// Pro, Claude opus adaptive thinking, GPT-5 reasoning_effort=high); everything
+// else falls through to the next model after 60s.
+const (
+	perModelTimeoutNonReasoning = 60 * time.Second
+	perModelTimeoutReasoning    = 180 * time.Second
+)
+
+// perModelTimeout returns the per-attempt timeout for a resolved model ID,
+// using the longer reasoning window for reasoning-capable models.
+func perModelTimeout(modelID string) time.Duration {
+	if models.IsReasoningModel(modelID) {
+		return perModelTimeoutReasoning
+	}
+	return perModelTimeoutNonReasoning
+}
 
 // Config controls the proxy server behavior.
 type Config struct {
@@ -61,9 +80,9 @@ type Server struct {
 	// Deferred startup for OpenClaw plugin config (upstream v0.12.142)
 	// When OpenClaw calls Register() twice, the first call has empty pluginConfig.
 	// We defer proxy startup by 250ms to allow the second call with real config.
-	startMu      sync.Mutex
-	deferTimer   *time.Timer
-	registered   bool
+	startMu    sync.Mutex
+	deferTimer *time.Timer
+	registered bool
 }
 
 // New creates a new proxy server.
@@ -412,12 +431,32 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	var attempts []attemptResult
 	var resp *http.Response
+	// cancelResp cancels the context of the SUCCESSFUL attempt; it is deferred
+	// after the loop so the chosen response body stays streamable until the
+	// handler returns, then its resources are released.
+	var cancelResp context.CancelFunc
 
 	for _, tryModel := range fallbackChain {
 		req.Model = tryModel
 		tryBody, _ := json.Marshal(req)
-		tryResp, tryErr := retry.Do(r.Context(), makeReqFor(tryBody), retry.WithClient(s.httpClient))
+		// Per-model timeout (upstream v0.12.182): reasoning models get 3min for
+		// cold-start first-token (DeepSeek V4 Pro / Claude opus thinking / GPT-5
+		// reasoning_effort=high can take 60-120s); non-reasoning get 60s. On
+		// timeout the loop falls through to the next model rather than failing.
+		//
+		// Implemented as cancel-context + AfterFunc (the Go equivalent of
+		// setTimeout/clearTimeout): the timer fires cancel() only if the attempt
+		// has not produced a response yet. On success we Stop() the timer so the
+		// long-lived stream is NOT cut at the per-model bound — it then runs under
+		// the parent request context / client timeout, matching upstream's
+		// clearTimeout-on-success behavior. Derived from r.Context() so a client
+		// disconnect still cancels the in-flight attempt.
+		attemptCtx, cancelAttempt := context.WithCancel(r.Context())
+		timer := time.AfterFunc(perModelTimeout(tryModel), cancelAttempt)
+		tryResp, tryErr := retry.Do(attemptCtx, makeReqFor(tryBody), retry.WithClient(s.httpClient))
 		if tryErr != nil {
+			timer.Stop()
+			cancelAttempt()
 			attempts = append(attempts, attemptResult{model: tryModel, reason: tryErr.Error()})
 			continue
 		}
@@ -425,6 +464,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		if tryResp.StatusCode >= 400 {
 			errBody, _ := io.ReadAll(tryResp.Body)
 			tryResp.Body.Close()
+			timer.Stop()
+			cancelAttempt()
 			reason := fmt.Sprintf("HTTP %d", tryResp.StatusCode)
 			if len(errBody) > 0 {
 				var errObj struct {
@@ -439,6 +480,10 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			attempts = append(attempts, attemptResult{model: tryModel, reason: reason})
 			continue
 		}
+		// Success: stop the per-model timer so streaming is not cut at the bound,
+		// and keep the context alive (cancel deferred after the loop).
+		timer.Stop()
+		cancelResp = cancelAttempt
 		resp = tryResp
 		resolvedModel = tryModel
 		if tryModel != fallbackChain[0] {
@@ -446,6 +491,9 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			w.Header().Set("X-DOSRouter-Model", tryModel)
 		}
 		break
+	}
+	if cancelResp != nil {
+		defer cancelResp()
 	}
 
 	if resp == nil {
