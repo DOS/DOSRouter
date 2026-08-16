@@ -98,6 +98,9 @@ func New(cfg Config) *Server {
 		modelPricing:  models.BuildPricingMap(),
 		httpClient: &http.Client{
 			Timeout: 5 * time.Minute,
+			Transport: &http.Transport{
+				Proxy: http.ProxyFromEnvironment,
+			},
 		},
 		dedup:        dedup.New(),
 		cache:        cache.New(),
@@ -676,6 +679,23 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 						if !ok {
 							continue
 						}
+						// Tool-call recovery (upstream v0.12.214, v0.12.215, v0.12.230):
+						// If model output formatted tool calls in plain text content, recover them.
+						if msg, ok := choice["message"].(map[string]interface{}); ok {
+							tc, _ := msg["tool_calls"].([]interface{})
+							if len(tc) == 0 {
+								contentStr, _ := msg["content"].(string)
+								if recovered := recoverStructuredToolCalls(contentStr, ""); len(recovered) > 0 {
+									recList := make([]interface{}, len(recovered))
+									for idx, r := range recovered {
+										recList[idx] = r
+									}
+									msg["tool_calls"] = recList
+									choice["finish_reason"] = "tool_calls"
+								}
+							}
+						}
+
 						if choiceEndsWithToolCalls(choice) {
 							if msg, ok := choice["message"].(map[string]interface{}); ok {
 								if s, _ := msg["content"].(string); s != "" {
@@ -700,10 +720,10 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
-		// Copy headers
+		// Copy headers with sanitization (upstream v0.12.208)
 		for k, v := range resp.Header {
 			for _, vv := range v {
-				w.Header().Add(k, vv)
+				w.Header().Add(k, sanitizeHeaderValue(vv))
 			}
 		}
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respBody)))

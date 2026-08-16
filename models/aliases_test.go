@@ -32,10 +32,12 @@ func TestNoDanglingAliases(t *testing.T) {
 // edit cannot silently regress them.
 func TestFlagshipAliasesResolve(t *testing.T) {
 	want := map[string]string{
-		"opus":     "anthropic/claude-opus-4.8",
-		"gpt5":     "openai/gpt-5.5",
-		"kimi":     "moonshot/kimi-k2.6",
-		"moonshot": "moonshot/kimi-k2.6",
+		"opus":     "anthropic/claude-opus-5",
+		"claude":   "anthropic/claude-sonnet-5",
+		"gpt5":     "openai/gpt-5.6-terra",
+		"kimi":     "moonshot/kimi-k2.7",
+		"grok":     "xai/grok-4.5",
+		"minimax":  "minimax/minimax-m3",
 		"o1":       "openai/o3",
 	}
 	for alias, target := range want {

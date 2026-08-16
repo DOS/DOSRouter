@@ -37,12 +37,17 @@ type PromoDef struct {
 // ModelAliases maps shorthand names to full model IDs.
 var ModelAliases = map[string]string{
 	// Claude
-	"claude":   "anthropic/claude-sonnet-4.6",
-	"sonnet":   "anthropic/claude-sonnet-4.6",
+	"claude":   "anthropic/claude-sonnet-5",
+	"sonnet":   "anthropic/claude-sonnet-5",
+	"sonnet-5": "anthropic/claude-sonnet-5",
 	"sonnet-4": "anthropic/claude-sonnet-4.6",
-	// Opus: 4.8 is current flagship. Bare and forward aliases resolve to 4.8;
-	// explicit version pins stay on their version (upstream v0.12.198).
-	"opus":                      "anthropic/claude-opus-4.8",
+	"fable":    "anthropic/claude-fable-5",
+	"claude-fable": "anthropic/claude-fable-5",
+	// Opus: Opus 5 is current flagship (upstream v0.12.233). Bare and forward aliases resolve to Opus 5;
+	// explicit version pins stay on their version.
+	"opus":                      "anthropic/claude-opus-5",
+	"opus-5":                    "anthropic/claude-opus-5",
+	"opus-5.0":                  "anthropic/claude-opus-5",
 	"opus-4":                    "anthropic/claude-opus-4.8",
 	"opus-4.8":                  "anthropic/claude-opus-4.8",
 	"opus-4-8":                  "anthropic/claude-opus-4.8",
@@ -51,108 +56,124 @@ var ModelAliases = map[string]string{
 	"opus-4.6":                  "anthropic/claude-opus-4.6",
 	"opus-4-6":                  "anthropic/claude-opus-4.6",
 	"haiku":                     "anthropic/claude-haiku-4.5",
-	"anthropic/sonnet":          "anthropic/claude-sonnet-4.6",
-	"anthropic/opus":            "anthropic/claude-opus-4.8",
+	"anthropic/sonnet":          "anthropic/claude-sonnet-5",
+	"anthropic/opus":            "anthropic/claude-opus-5",
+	"anthropic/claude-opus-5":   "anthropic/claude-opus-5",
 	"anthropic/haiku":           "anthropic/claude-haiku-4.5",
-	"anthropic/claude":          "anthropic/claude-sonnet-4.6",
+	"anthropic/claude":          "anthropic/claude-sonnet-5",
 	"anthropic/claude-opus-4":   "anthropic/claude-opus-4.8",
 	"anthropic/claude-opus-4-8": "anthropic/claude-opus-4.8",
 	"anthropic/claude-opus-4-7": "anthropic/claude-opus-4.7",
 	"anthropic/claude-opus-4-6": "anthropic/claude-opus-4.6",
-	// 4.5 skips 4.6/4.7 straight to the 4.8 flagship (upstream behavior).
 	"anthropic/claude-opus-4.5": "anthropic/claude-opus-4.8",
 
-	// OpenAI — gpt5 bare alias resolves to the 5.5 flagship (upstream v0.12.168).
+	// OpenAI — GPT-5.6 Terra is the current default flagship (upstream v0.12.219).
 	"gpt":                       "openai/gpt-4o",
 	"gpt4":                      "openai/gpt-4o",
-	"gpt5":                      "openai/gpt-5.5",
+	"gpt5":                      "openai/gpt-5.6-terra",
+	"gpt-5.6":                   "openai/gpt-5.6-terra",
+	"gpt-5.6-terra":             "openai/gpt-5.6-terra",
+	"gpt-5.6-sol":               "openai/gpt-5.6-sol",
+	"gpt-5.6-luna":              "openai/gpt-5.6-luna",
 	"gpt-5.5":                   "openai/gpt-5.5",
+	"gpt-5.5-pro":               "openai/gpt-5.5-pro",
+	"chat-latest":               "openai/chatgpt-instant",
+	"chatgpt-instant":           "openai/chatgpt-instant",
 	"mini":                      "openai/gpt-4o-mini",
 	"nano":                      "openai/gpt-5.4-nano",
 	"gpt-5.4-mini":              "openai/gpt-5.4-mini",
 	"openai-codex/gpt-5.4-mini": "openai/gpt-5.4-mini",
 	"codex":                     "openai/gpt-5.3-codex",
-	// o1 has no catalog ModelDef (sunset); redirect to o3 so the alias still
-	// resolves to a model with pricing + reasoning metadata.
-	"o1": "openai/o3",
-	"o3": "openai/o3",
+	"o1":                        "openai/o3",
+	"o3":                        "openai/o3",
 
 	// DeepSeek
-	"deepseek":      "deepseek/deepseek-chat",
-	"deepseek-chat": "deepseek/deepseek-chat",
-	"reasoner":      "deepseek/deepseek-reasoner",
+	"deepseek":        "deepseek/deepseek-chat",
+	"deepseek-chat":   "deepseek/deepseek-chat",
+	"reasoner":        "deepseek/deepseek-reasoner",
+	"deepseek-v4-pro": "deepseek/deepseek-v4-pro",
 
-	// Kimi / Moonshot — K2.6 is the featured flagship on BlockRun (K2.5 hidden in
-	// BlockRun's UI 2026-04-28). Bare aliases now resolve to K2.6; users who want
-	// the cheaper K2.5 ($0.60/$3.00 vs K2.6 $0.95/$4.00) must pin it explicitly.
-	// NVIDIA-hosted K2.5 retired 2026-04-21. Upstream v0.12.171/v0.12.174.
-	"kimi":             "moonshot/kimi-k2.6",
-	"moonshot":         "moonshot/kimi-k2.6",
+	// Kimi / Moonshot — K2.7 bare flagship, K3 available (upstream v0.12.229/230)
+	"kimi":             "moonshot/kimi-k2.7",
+	"moonshot":         "moonshot/kimi-k2.7",
+	"kimi-k3":          "moonshot/kimi-k3",
+	"kimi-k2.7":        "moonshot/kimi-k2.7",
 	"kimi-k2":          "moonshot/kimi-k2.6",
 	"kimi-k2.6":        "moonshot/kimi-k2.6",
 	"kimi-k2.5":        "moonshot/kimi-k2.5",
 	"nvidia/kimi-k2.5": "moonshot/kimi-k2.5",
 
 	// Google
-	"gemini": "google/gemini-2.5-pro",
-	"flash":  "google/gemini-2.5-flash",
+	"gemini":           "google/gemini-2.5-pro",
+	"flash":            "google/gemini-2.5-flash",
+	"gemini-3.5-flash": "google/gemini-3.5-flash",
 
-	// xAI
-	"grok":      "xai/grok-3",
+	// xAI — Grok 4.5 flagship (upstream v0.12.225)
+	"grok":      "xai/grok-4.5",
+	"grok-4.5":  "xai/grok-4.5",
+	"grok-4.3":  "xai/grok-4.3",
 	"grok-fast": "xai/grok-4-fast-reasoning",
 	"grok-4.20": "xai/grok-4.20-reasoning",
 	"grok-4-20": "xai/grok-4.20-reasoning",
 
-	// Free models — realigned with BlockRun server 2026-04-21 (upstream v0.12.160):
-	// retired nemotron family, mistral-large-3-675b, devstral-2-123b.
-	// Successors: qwen3-next-80b-a3b-thinking (reasoning), mistral-small-4-119b (chat).
+	// MiniMax — M3 flagship (upstream v0.12.200)
+	"minimax":    "minimax/minimax-m3",
+	"minimax-m3": "minimax/minimax-m3",
+
+	// Qwen — Qwen 3.7 Max (upstream v0.12.231)
+	"qwen3.7-max": "qwen/qwen3.7-max",
+	"qwen-max":    "qwen/qwen3.7-max",
+
+	// Free models — realigned with BlockRun server up to v0.12.245
 	"nvidia":          "free/gpt-oss-120b",
 	"free":            "free/gpt-oss-120b",
-	"qwen-coder":      "free/qwen3-coder-480b",
-	"qwen-coder-free": "free/qwen3-coder-480b",
+	"qwen-coder":      "free/llama-4-maverick",
+	"qwen-coder-free": "free/llama-4-maverick",
 	"qwen-thinking":   "free/qwen3-next-80b-a3b-thinking",
 	"qwen3-next":      "free/qwen3-next-80b-a3b-thinking",
-	"mistral-small":   "free/mistral-small-4-119b",
-	"mistral-free":    "free/mistral-small-4-119b",
-	// DeepSeek free: V4 Pro NVIDIA-hung 2026-04-30, V3.2 superseded → all redirect
-	// to V4 Flash (upstream v0.12.191).
-	"deepseek-free":            "free/deepseek-v4-flash",
-	"deepseek-v4-flash":        "free/deepseek-v4-flash",
-	"deepseek-v4-pro":          "free/deepseek-v4-flash",
-	"v4-flash":                 "free/deepseek-v4-flash",
-	"v4-pro":                   "free/deepseek-v4-flash",
-	"free/deepseek-v3.2":       "free/deepseek-v4-flash",
-	"free/deepseek-v4-pro":     "free/deepseek-v4-flash",
-	"nvidia/deepseek-v3.2":     "free/deepseek-v4-flash",
-	"nvidia/deepseek-v4-pro":   "free/deepseek-v4-flash",
-	"nvidia/deepseek-v4-flash": "free/deepseek-v4-flash",
+	"mistral-small":   "free/llama-4-maverick",
+	"mistral-free":    "free/llama-4-maverick",
+	// DeepSeek free redirects (V4 Flash EOL -> llama-4-maverick upstream v0.12.245)
+	"deepseek-free":            "free/llama-4-maverick",
+	"deepseek-v4-flash":        "free/llama-4-maverick",
+	"v4-flash":                 "free/llama-4-maverick",
+	"free/deepseek-v3.2":       "free/llama-4-maverick",
+	"free/deepseek-v4-pro":     "free/llama-4-maverick",
+	"free/deepseek-v4-flash":   "free/llama-4-maverick",
+	"nvidia/deepseek-v3.2":     "free/llama-4-maverick",
+	"nvidia/deepseek-v4-pro":   "free/llama-4-maverick",
+	"nvidia/deepseek-v4-flash": "free/llama-4-maverick",
 	"glm-free":                 "free/glm-4.7",
 	"llama-free":               "free/llama-4-maverick",
 	"maverick":                 "free/llama-4-maverick",
-	// Retired free IDs → successors (mirror server-side redirects so stale configs keep working)
+	// Retired free IDs -> successors
 	"nemotron":                     "free/qwen3-next-80b-a3b-thinking",
 	"nemotron-ultra":               "free/qwen3-next-80b-a3b-thinking",
 	"nemotron-253b":                "free/qwen3-next-80b-a3b-thinking",
 	"nemotron-super":               "free/qwen3-next-80b-a3b-thinking",
 	"nemotron-49b":                 "free/qwen3-next-80b-a3b-thinking",
 	"nemotron-120b":                "free/qwen3-next-80b-a3b-thinking",
-	"devstral":                     "free/qwen3-coder-480b",
-	"devstral-2":                   "free/qwen3-coder-480b",
+	"devstral":                     "free/llama-4-maverick",
+	"devstral-2":                   "free/llama-4-maverick",
 	"free/nemotron-ultra-253b":     "free/qwen3-next-80b-a3b-thinking",
 	"free/nemotron-3-super-120b":   "free/qwen3-next-80b-a3b-thinking",
 	"free/nemotron-super-49b":      "free/qwen3-next-80b-a3b-thinking",
-	"free/mistral-large-3-675b":    "free/mistral-small-4-119b",
-	"free/devstral-2-123b":         "free/qwen3-coder-480b",
+	"free/mistral-large-3-675b":    "free/llama-4-maverick",
+	"free/mistral-small-4-119b":    "free/llama-4-maverick",
+	"free/devstral-2-123b":         "free/llama-4-maverick",
+	"free/qwen3-coder-480b":        "free/llama-4-maverick",
+	"free/seed-oss-36b":            "free/gpt-oss-120b",
 	"nvidia/nemotron-ultra-253b":   "free/qwen3-next-80b-a3b-thinking",
 	"nvidia/nemotron-3-super-120b": "free/qwen3-next-80b-a3b-thinking",
 	"nvidia/nemotron-super-49b":    "free/qwen3-next-80b-a3b-thinking",
-	"nvidia/mistral-large-3-675b":  "free/mistral-small-4-119b",
-	"nvidia/devstral-2-123b":       "free/qwen3-coder-480b",
+	"nvidia/mistral-large-3-675b":  "free/llama-4-maverick",
+	"nvidia/devstral-2-123b":       "free/llama-4-maverick",
 
-	// Z.AI
-	"glm":     "zai/glm-5.1",
-	"glm-5":   "zai/glm-5",
+	// Z.AI — GLM-5.2 is the flagship (upstream v0.12.211)
+	"glm":     "zai/glm-5.2",
+	"glm-5.2": "zai/glm-5.2",
 	"glm-5.1": "zai/glm-5.1",
+	"glm-5":   "zai/glm-5",
 
 	// Routing profiles
 	"auto-router": "auto",
@@ -167,47 +188,61 @@ var Models = []ModelDef{
 	{ID: "premium", Name: "Premium (Smart Router - Best Quality)", ContextWindow: 2_000_000, MaxOutput: 200_000},
 	{ID: "free", Name: "Free - Nemotron Ultra 253B", ContextWindow: 131_072, MaxOutput: 16_384, Reasoning: true},
 
-	// OpenAI — GPT-5.5 is the current flagship (upstream v0.12.168).
+	// OpenAI — GPT-5.6 Terra is current flagship (upstream v0.12.219).
+	{ID: "openai/gpt-5.6-terra", Name: "GPT-5.6 Terra", Version: "5.6", InputPrice: 5.0, OutputPrice: 30.0, ContextWindow: 1_050_000, MaxOutput: 128_000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/gpt-5.6-sol", Name: "GPT-5.6 Sol", Version: "5.6", InputPrice: 5.0, OutputPrice: 30.0, ContextWindow: 1_050_000, MaxOutput: 128_000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/gpt-5.6-luna", Name: "GPT-5.6 Luna", Version: "5.6", InputPrice: 5.0, OutputPrice: 30.0, ContextWindow: 1_050_000, MaxOutput: 128_000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/gpt-5.5-pro", Name: "GPT-5.5 Pro", Version: "5.5", InputPrice: 21.0, OutputPrice: 168.0, ContextWindow: 1_050_000, MaxOutput: 128_000, Reasoning: true, ToolCalling: true},
 	{ID: "openai/gpt-5.5", Name: "GPT-5.5", Version: "5.5", InputPrice: 5.0, OutputPrice: 30.0, ContextWindow: 1_050_000, MaxOutput: 128_000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-5.4", Name: "GPT-5.4", Version: "5.4", InputPrice: 2.5, OutputPrice: 10.0, ContextWindow: 1_050_000, MaxOutput: 128_000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-5.4-mini", Name: "GPT-5.4 Mini", Version: "5.4", InputPrice: 0.75, OutputPrice: 4.5, ContextWindow: 400_000, MaxOutput: 128_000, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-5.4-nano", Name: "GPT-5.4 Nano", Version: "5.4", InputPrice: 0.20, OutputPrice: 1.25, ContextWindow: 1_050_000, MaxOutput: 128_000, ToolCalling: true},
 	{ID: "openai/gpt-5.4-pro", Name: "GPT-5.4 Pro", Version: "5.4", InputPrice: 21.0, OutputPrice: 168.0, ContextWindow: 1_050_000, MaxOutput: 128_000, Reasoning: true, ToolCalling: true},
 	{ID: "openai/gpt-5.3-codex", Name: "GPT-5.3 Codex", Version: "5.3", InputPrice: 1.75, OutputPrice: 14.0, ContextWindow: 400_000, MaxOutput: 128_000, Reasoning: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/chatgpt-instant", Name: "ChatGPT Instant", InputPrice: 0.50, OutputPrice: 2.00, ContextWindow: 128_000, MaxOutput: 16_384, ToolCalling: true},
 	{ID: "openai/gpt-4o", Name: "GPT-4o", InputPrice: 2.5, OutputPrice: 10.0, ContextWindow: 128_000, MaxOutput: 16_384, Vision: true, ToolCalling: true},
 	{ID: "openai/gpt-4o-mini", Name: "GPT-4o Mini", InputPrice: 0.15, OutputPrice: 0.6, ContextWindow: 128_000, MaxOutput: 16_384, ToolCalling: true},
 	{ID: "openai/o3", Name: "o3", InputPrice: 2.0, OutputPrice: 8.0, ContextWindow: 200_000, MaxOutput: 100_000, Reasoning: true, ToolCalling: true},
 	{ID: "openai/o4-mini", Name: "o4-mini", InputPrice: 1.10, OutputPrice: 4.40, ContextWindow: 200_000, MaxOutput: 100_000, Reasoning: true, ToolCalling: true},
 
-	// Anthropic — Opus 4.8 is the current flagship (upstream v0.12.198).
+	// Anthropic — Opus 5 is the current flagship (upstream v0.12.233).
+	{ID: "anthropic/claude-opus-5", Name: "Claude Opus 5", Version: "5.0", InputPrice: 5.0, OutputPrice: 25.0, ContextWindow: 1_000_000, MaxOutput: 128_000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "anthropic/claude-opus-4.8", Name: "Claude Opus 4.8", Version: "4.8", InputPrice: 5.0, OutputPrice: 25.0, ContextWindow: 1_000_000, MaxOutput: 128_000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "anthropic/claude-opus-4.7", Name: "Claude Opus 4.7", Version: "4.7", InputPrice: 5.0, OutputPrice: 25.0, ContextWindow: 1_000_000, MaxOutput: 128_000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "anthropic/claude-opus-4.6", Name: "Claude Opus 4.6", Version: "4.6", InputPrice: 5.0, OutputPrice: 25.0, ContextWindow: 1_000_000, MaxOutput: 128_000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "anthropic/claude-sonnet-5", Name: "Claude Sonnet 5", Version: "5.0", InputPrice: 3.0, OutputPrice: 15.0, ContextWindow: 200_000, MaxOutput: 64_000, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "anthropic/claude-fable-5", Name: "Claude Fable 5", Version: "5.0", InputPrice: 3.0, OutputPrice: 15.0, ContextWindow: 200_000, MaxOutput: 64_000, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "anthropic/claude-sonnet-4.6", Name: "Claude Sonnet 4.6", Version: "4.6", InputPrice: 3.0, OutputPrice: 15.0, ContextWindow: 200_000, MaxOutput: 64_000, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "anthropic/claude-haiku-4.5", Name: "Claude Haiku 4.5", Version: "4.5", InputPrice: 0.80, OutputPrice: 4.0, ContextWindow: 200_000, MaxOutput: 8192, ToolCalling: true},
 
 	// Google
+	{ID: "google/gemini-3.5-flash", Name: "Gemini 3.5 Flash", Version: "3.5", InputPrice: 0.15, OutputPrice: 0.60, ContextWindow: 1_050_000, MaxOutput: 65_536, Vision: true, ToolCalling: true},
 	{ID: "google/gemini-3.1-pro", Name: "Gemini 3.1 Pro", Version: "3.1", InputPrice: 1.25, OutputPrice: 10.0, ContextWindow: 2_000_000, MaxOutput: 65_536, Vision: true, ToolCalling: true},
 	{ID: "google/gemini-3.1-flash-lite", Name: "Gemini 3.1 Flash Lite", Version: "3.1", InputPrice: 0.25, OutputPrice: 1.50, ContextWindow: 1_050_000, MaxOutput: 65_536, ToolCalling: true},
-	{ID: "google/gemini-3-pro-preview", Name: "Gemini 3 Pro Preview", Version: "3.0", InputPrice: 1.25, OutputPrice: 10.0, ContextWindow: 1_050_000, MaxOutput: 65_536, Vision: true, ToolCalling: true},
+	{ID: "google/gemini-3-pro-preview", Name: "Gemini 3 Pro Preview", Version: "3.0", InputPrice: 1.25, OutputPrice: 10.0, ContextWindow: 1_050_000, MaxOutput: 65_536, Vision: true, ToolCalling: true, Deprecated: true, FallbackModel: "google/gemini-3.1-pro"},
 	{ID: "google/gemini-3-flash-preview", Name: "Gemini 3 Flash Preview", Version: "3.0", InputPrice: 0.15, OutputPrice: 0.60, ContextWindow: 1_050_000, MaxOutput: 65_536, ToolCalling: true},
 	{ID: "google/gemini-2.5-pro", Name: "Gemini 2.5 Pro", Version: "2.5", InputPrice: 1.25, OutputPrice: 10.0, ContextWindow: 1_050_000, MaxOutput: 65_536, Reasoning: true, Vision: true, ToolCalling: true},
 	{ID: "google/gemini-2.5-flash", Name: "Gemini 2.5 Flash", Version: "2.5", InputPrice: 0.15, OutputPrice: 0.60, ContextWindow: 1_050_000, MaxOutput: 65_536, Vision: true, ToolCalling: true},
 	{ID: "google/gemini-2.5-flash-lite", Name: "Gemini 2.5 Flash Lite", Version: "2.5", InputPrice: 0.10, OutputPrice: 0.40, ContextWindow: 1_050_000, MaxOutput: 65_536, ToolCalling: true},
 
 	// DeepSeek
+	{ID: "deepseek/deepseek-v4-pro", Name: "DeepSeek V4 Pro", Version: "v4-pro", InputPrice: 0.55, OutputPrice: 2.19, ContextWindow: 1_000_000, MaxOutput: 65_536, Reasoning: true, ToolCalling: true},
 	{ID: "deepseek/deepseek-chat", Name: "DeepSeek V3", InputPrice: 0.27, OutputPrice: 1.10, ContextWindow: 128_000, MaxOutput: 16_384, ToolCalling: true},
 	{ID: "deepseek/deepseek-reasoner", Name: "DeepSeek R1", InputPrice: 0.55, OutputPrice: 2.19, ContextWindow: 128_000, MaxOutput: 16_384, Reasoning: true},
 
-	// Kimi K2.6 - Moonshot's flagship (upstream v0.12.156). Only served via Moonshot direct API.
+	// Kimi K3 & K2.7 - Moonshot flagship (upstream v0.12.229/230)
+	{ID: "moonshot/kimi-k3", Name: "Kimi K3", Version: "k3", InputPrice: 1.20, OutputPrice: 5.0, ContextWindow: 262_144, MaxOutput: 65_536, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "moonshot/kimi-k2.7", Name: "Kimi K2.7", Version: "k2.7", InputPrice: 0.95, OutputPrice: 4.0, ContextWindow: 262_144, MaxOutput: 65_536, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "moonshot/kimi-k2.6", Name: "Kimi K2.6", Version: "k2.6", InputPrice: 0.95, OutputPrice: 4.0, ContextWindow: 262_144, MaxOutput: 65_536, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
-
-	// Kimi K2.5 - Moonshot direct is primary (upstream v0.12.160). NVIDIA variant
-	// retired 2026-04-21 (slow throughput); kept as deprecated with fallback.
 	{ID: "moonshot/kimi-k2.5", Name: "Kimi K2.5", Version: "k2.5", InputPrice: 0.60, OutputPrice: 3.0, ContextWindow: 262_144, MaxOutput: 16_384, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "nvidia/kimi-k2.5", Name: "Kimi K2.5 (NVIDIA, retired)", Version: "k2.5", InputPrice: 0.60, OutputPrice: 3.0, ContextWindow: 262_144, MaxOutput: 8192, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true, Deprecated: true, FallbackModel: "moonshot/kimi-k2.5"},
 
-	// xAI
+	// Qwen
+	{ID: "qwen/qwen3.7-max", Name: "Qwen 3.7 Max", Version: "3.7", InputPrice: 1.50, OutputPrice: 6.0, ContextWindow: 1_000_000, MaxOutput: 65_536, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+
+	// xAI — Grok 4.5 & 4.3 (upstream v0.12.201, v0.12.225)
+	{ID: "xai/grok-4.5", Name: "Grok 4.5", Version: "4.5", InputPrice: 2.0, OutputPrice: 6.0, ContextWindow: 2_000_000, MaxOutput: 16_384, Reasoning: true, ToolCalling: true},
+	{ID: "xai/grok-4.3", Name: "Grok 4.3", Version: "4.3", InputPrice: 2.0, OutputPrice: 6.0, ContextWindow: 2_000_000, MaxOutput: 16_384, Reasoning: true, ToolCalling: true},
 	{ID: "xai/grok-4-0709", Name: "Grok 4", InputPrice: 3.0, OutputPrice: 15.0, ContextWindow: 200_000, MaxOutput: 100_000, Vision: true, ToolCalling: true},
 	{ID: "xai/grok-4-fast-reasoning", Name: "Grok 4 Fast Reasoning", InputPrice: 0.20, OutputPrice: 0.50, ContextWindow: 131_072, MaxOutput: 32_768, Reasoning: true, ToolCalling: true},
 	{ID: "xai/grok-4-1-fast-reasoning", Name: "Grok 4.1 Fast Reasoning", InputPrice: 0.20, OutputPrice: 0.50, ContextWindow: 131_072, MaxOutput: 32_768, Reasoning: true, ToolCalling: true},
@@ -225,29 +260,29 @@ var Models = []ModelDef{
 	{ID: "free/gpt-oss-120b", Name: "GPT-OSS 120B (Free)", ContextWindow: 131_072, MaxOutput: 16_384},
 	{ID: "free/gpt-oss-20b", Name: "GPT-OSS 20B (Free)", ContextWindow: 131_072, MaxOutput: 16_384},
 	{ID: "free/qwen3-next-80b-a3b-thinking", Name: "Qwen3 Next 80B A3B Thinking (Free)", ContextWindow: 131_072, MaxOutput: 16_384, Reasoning: true},
-	{ID: "free/mistral-small-4-119b", Name: "Mistral Small 4 119B (Free)", ContextWindow: 131_072, MaxOutput: 16_384},
-	// DeepSeek V4 Flash is the current free DeepSeek (upstream v0.12.191). V4 Pro
-	// and V3.2 were delisted (NVIDIA hung 2026-04-30); kept as deprecated redirects.
-	{ID: "free/deepseek-v4-flash", Name: "DeepSeek V4 Flash (Free)", Version: "v4-flash", ContextWindow: 1_000_000, MaxOutput: 16_384, Reasoning: true},
-	{ID: "free/deepseek-v3.2", Name: "DeepSeek V3.2 (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/deepseek-v4-flash"},
-	{ID: "free/deepseek-v4-pro", Name: "DeepSeek V4 Pro (retired)", ContextWindow: 1_000_000, MaxOutput: 16_384, Reasoning: true, Deprecated: true, FallbackModel: "free/deepseek-v4-flash"},
-	{ID: "free/qwen3-coder-480b", Name: "Qwen3 Coder 480B (Free)", ContextWindow: 131_072, MaxOutput: 16_384},
+	{ID: "free/mistral-small-4-119b", Name: "Mistral Small 4 119B (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/llama-4-maverick"},
+	{ID: "free/deepseek-v4-flash", Name: "DeepSeek V4 Flash (retired)", Version: "v4-flash", ContextWindow: 1_000_000, MaxOutput: 16_384, Reasoning: true, Deprecated: true, FallbackModel: "free/llama-4-maverick"},
+	{ID: "free/deepseek-v3.2", Name: "DeepSeek V3.2 (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/llama-4-maverick"},
+	{ID: "free/deepseek-v4-pro", Name: "DeepSeek V4 Pro (retired)", ContextWindow: 1_000_000, MaxOutput: 16_384, Reasoning: true, Deprecated: true, FallbackModel: "free/llama-4-maverick"},
+	{ID: "free/qwen3-coder-480b", Name: "Qwen3 Coder 480B (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/llama-4-maverick"},
 	{ID: "free/glm-4.7", Name: "GLM 4.7 (Free)", ContextWindow: 131_072, MaxOutput: 16_384},
 	{ID: "free/llama-4-maverick", Name: "Llama 4 Maverick (Free)", ContextWindow: 131_072, MaxOutput: 16_384},
-	// Retired free models (upstream v0.12.160): kept for catalog back-compat, routed via FallbackModel.
+	{ID: "free/seed-oss-36b", Name: "Seed OSS 36B (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/gpt-oss-120b"},
+	// Retired free models (upstream v0.12.160/v0.12.245): kept for catalog back-compat, routed via FallbackModel.
 	{ID: "free/nemotron-ultra-253b", Name: "Nemotron Ultra 253B (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Reasoning: true, Deprecated: true, FallbackModel: "free/qwen3-next-80b-a3b-thinking"},
 	{ID: "free/nemotron-super-49b", Name: "Nemotron Super 49B (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/qwen3-next-80b-a3b-thinking"},
 	{ID: "free/nemotron-3-super-120b", Name: "Nemotron 3 Super 120B (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/qwen3-next-80b-a3b-thinking"},
-	{ID: "free/mistral-large-3-675b", Name: "Mistral Large 3 675B (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/mistral-small-4-119b"},
-	{ID: "free/devstral-2-123b", Name: "Devstral 2 123B (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/qwen3-coder-480b"},
+	{ID: "free/mistral-large-3-675b", Name: "Mistral Large 3 675B (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/llama-4-maverick"},
+	{ID: "free/devstral-2-123b", Name: "Devstral 2 123B (retired)", ContextWindow: 131_072, MaxOutput: 16_384, Deprecated: true, FallbackModel: "free/llama-4-maverick"},
 
-	// Z.AI
-	{ID: "zai/glm-5.1", Name: "GLM-5.1", Version: "5.1", InputPrice: 1.4, OutputPrice: 4.4, ContextWindow: 200_000, MaxOutput: 128_000, ToolCalling: true,
-		Promo: &PromoDef{FlatPrice: 0.001, StartDate: "2026-04-01", EndDate: "2026-04-15"}},
-	{ID: "zai/glm-5", Name: "GLM-5", InputPrice: 1.0, OutputPrice: 3.2, ContextWindow: 131_072, MaxOutput: 16_384, ToolCalling: true},
-	{ID: "zai/glm-5-turbo", Name: "GLM-5 Turbo", InputPrice: 0.20, OutputPrice: 0.80, ContextWindow: 131_072, MaxOutput: 16_384, ToolCalling: true},
+	// Z.AI — GLM-5.2 is current flagship (upstream v0.12.211)
+	{ID: "zai/glm-5.2", Name: "GLM-5.2", Version: "5.2", InputPrice: 1.6, OutputPrice: 5.0, ContextWindow: 200_000, MaxOutput: 128_000, ToolCalling: true},
+	{ID: "zai/glm-5.1", Name: "GLM-5.1", Version: "5.1", InputPrice: 1.4, OutputPrice: 4.4, ContextWindow: 200_000, MaxOutput: 128_000, ToolCalling: true},
+	{ID: "zai/glm-5", Name: "GLM-5", InputPrice: 0.60, OutputPrice: 1.92, ContextWindow: 131_072, MaxOutput: 16_384, ToolCalling: true},
+	{ID: "zai/glm-5-turbo", Name: "GLM-5 Turbo", InputPrice: 1.20, OutputPrice: 4.00, ContextWindow: 131_072, MaxOutput: 16_384, ToolCalling: true},
 
-	// MiniMax
+	// MiniMax — M3 is current flagship with Vision (upstream v0.12.200, v0.12.236)
+	{ID: "minimax/minimax-m3", Name: "MiniMax M3", Version: "m3", InputPrice: 0.50, OutputPrice: 2.00, ContextWindow: 1_050_000, MaxOutput: 128_000, Vision: true, ToolCalling: true},
 	{ID: "minimax/minimax-m2.7", Name: "MiniMax M2.7", InputPrice: 1.0, OutputPrice: 5.0, ContextWindow: 1_050_000, MaxOutput: 128_000, ToolCalling: true},
 }
 
