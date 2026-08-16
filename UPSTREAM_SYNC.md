@@ -2,7 +2,7 @@
 
 **Upstream**: [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript)
 **This repo**: [DOS/DOSRouter](https://github.com/DOS/DOSRouter) (Go port)
-**Last synced**: v0.12.199 (2026-06-01, core ported — partner skills deferred, see sync log)
+**Last synced**: v0.12.245 (2026-08-16, core ported & aligned)
 
 ## Sync Workflow
 
@@ -30,7 +30,28 @@ These upstream areas are excluded (TS/npm-specific):
 
 ## Sync Log
 
-### 2026-06-01 - Sync to v0.12.199 (core ported, partner skills deferred)
+### 2026-08-16 - Sync to v0.12.245 (flagship models, tool-call recovery, proxy hardening)
+
+Diffed `v0.12.199...v0.12.245` (46 tags).
+
+**Ported (Go core):**
+
+| Upstream | Status | Summary |
+|----------|--------|---------|
+| v0.12.233 | DONE | Claude Opus 5 flagship — model def + bare alias `opus` -> Opus 5 ($5/$25, 1M ctx); promoted to Premium/Agentic Complex primary |
+| v0.12.217 | DONE | Claude Sonnet 5 & Fable 5 — model def ($3/$15) + bare alias `claude`/`sonnet` -> Sonnet 5 |
+| v0.12.219 | DONE | GPT-5.6 family (Sol, Terra, Luna) — `gpt5` bare alias -> GPT-5.6 Terra ($5/$30); promoted to Auto Complex primary |
+| v0.12.234 | DONE | GPT-5.5 Pro & ChatGPT Instant (`chat-latest` alias) |
+| v0.12.229/230 | DONE | Kimi K3 & K2.7 — K2.7 bare alias `kimi`, K3 available; promoted to Agentic Medium primary |
+| v0.12.231 | DONE | Qwen 3.7 Max ($1.50/$6, 1M ctx) added |
+| v0.12.211 | DONE | Z.AI GLM-5.2 flagship added ($1.60/$5) + pricing updates |
+| v0.12.200/236 | DONE | MiniMax M3 flagship + vision capability flag ($0.50/$2) |
+| v0.12.221/225 | DONE | Grok 4.5 & 4.3 flagships + alias |
+| v0.12.201 | DONE | Google Gemini 3.5 Flash added; delisted gemini-3-pro-preview & o1-mini |
+| v0.12.201 | DONE | DeepSeek V4 Pro paid model added; DeepSeek V4 Flash EOL -> free/llama-4-maverick fallback |
+| v0.12.214/215/230 | DONE | Tool-call recovery: parse structured tool calls from Gemini markdown transcripts, GPT-5.4 plain-text, and Kimi K3 nameless blobs |
+| v0.12.208 | DONE | Header sanitization: sanitize `x-clawrouter-reasoning` / response headers to strip non-ASCII / control chars |
+| v0.12.207 | DONE | Egress proxy support: configure `http.ProxyFromEnvironment` for `HTTPS_PROXY` / `HTTP_PROXY` / `ALL_PROXY` |
 
 Upstream stopped cutting GitHub *releases* after v0.12.159 but kept *tagging*
 through v0.12.199. Diffed `v0.12.161...v0.12.199` (28 tags) by commit.
