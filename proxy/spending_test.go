@@ -41,3 +41,15 @@ func TestCallerCredentialsDoNotShareResponseCache(t *testing.T) {
 		t.Fatalf("upstream calls=%d", calls.Load())
 	}
 }
+
+func TestRecoveredCallsHaveUniqueIDsAndDeclaredNames(t *testing.T) {
+	tools := []byte(`[{"type":"function","function":{"name":"read_file"}}]`)
+	input := "First. call:read_file({}) Then. call:read_file({}) call:undeclared({})"
+	calls, prose := recoverToolCallsWithProse(input, tools)
+	if len(calls) != 2 || calls[0]["id"] == calls[1]["id"] {
+		t.Fatalf("calls=%v", calls)
+	}
+	if !strings.Contains(prose, "call:undeclared({})") || strings.Contains(prose, "call:read_file") {
+		t.Fatalf("prose=%q", prose)
+	}
+}

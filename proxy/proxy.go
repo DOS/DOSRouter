@@ -772,10 +772,10 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 						// If model output formatted tool calls in plain text content, recover them.
 						if msg, ok := choice["message"].(map[string]interface{}); ok {
 							tc, _ := msg["tool_calls"].([]interface{})
-							if len(tc) == 0 {
+							if len(tc) == 0 && strings.TrimSpace(string(req.Extra["tool_choice"])) != `"none"` {
 								contentStr, _ := msg["content"].(string)
 								contentStr = stripThinking(contentStr)
-								if recovered, cleaned := recoverToolCallsWithProse(contentStr); len(recovered) > 0 && len(req.Tools) > 0 {
+								if recovered, cleaned := recoverToolCallsWithProse(contentStr, req.Tools); len(recovered) > 0 && len(req.Tools) > 0 {
 									msg["content"] = cleaned
 									recList := make([]interface{}, len(recovered))
 									for idx, r := range recovered {

@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/url"
 	"os"
 	"strings"
@@ -84,14 +85,39 @@ func forwardToolCallProse() bool {
 }
 
 // Remove only syntax which actually recovered into a tool call.
-func recoverToolCallsWithProse(content string) ([]map[string]interface{}, string) {
+func recoverToolCallsWithProse(content string, tools json.RawMessage) ([]map[string]interface{}, string) {
+	var definitions []struct {
+		Type     string `json:"type"`
+		Function struct {
+			Name string `json:"name"`
+		} `json:"function"`
+	}
+	if json.Unmarshal(tools, &definitions) != nil {
+		return nil, content
+	}
+	allowed := make(map[string]bool)
+	for _, def := range definitions {
+		if def.Type == "function" && def.Function.Name != "" {
+			allowed[def.Function.Name] = true
+		}
+	}
 	var calls []map[string]interface{}
 	clean := func(match string) string {
 		found := recoverStructuredToolCalls(match, "")
 		if len(found) == 0 {
 			return match
 		}
-		calls = append(calls, found...)
+		for _, call := range found {
+			function, _ := call["function"].(map[string]interface{})
+			name, _ := function["name"].(string)
+			if !allowed[name] {
+				return match
+			}
+		}
+		for _, call := range found {
+			call["id"] = fmt.Sprintf("call_recovered_%d", len(calls))
+			calls = append(calls, call)
+		}
 		return ""
 	}
 	cleaned := jsonCodeBlockRegex.ReplaceAllStringFunc(content, clean)
