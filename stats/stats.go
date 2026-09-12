@@ -72,26 +72,45 @@ type logEntry struct {
 
 func parseLogFile(filePath string) []logEntry {
 	data, err := os.ReadFile(filePath)
-	if err != nil { return nil }
+	if err != nil {
+		return nil
+	}
 	lines := strings.Split(strings.TrimSpace(string(data)), "\n")
 	entries := make([]logEntry, 0, len(lines))
 	for _, line := range lines {
-		if line == "" { continue }
+		if line == "" {
+			continue
+		}
 		var e logEntry
-		if err := json.Unmarshal([]byte(line), &e); err != nil { continue }
-		if e.Timestamp == "" { e.Timestamp = time.Now().Format(time.RFC3339) }
-		if e.Model == "" { e.Model = "unknown" }
-		if e.Tier == "" { e.Tier = "UNKNOWN" }
-		if e.BaselineCost == 0 { e.BaselineCost = e.Cost }
+		if err := json.Unmarshal([]byte(line), &e); err != nil {
+			continue
+		}
+		if e.Timestamp == "" {
+			e.Timestamp = time.Now().Format(time.RFC3339)
+		}
+		if e.Model == "" {
+			e.Model = "unknown"
+		}
+		if e.Tier == "" {
+			e.Tier = "UNKNOWN"
+		}
+		if e.BaselineCost == 0 {
+			e.BaselineCost = e.Cost
+		}
 		entries = append(entries, e)
 	}
 	return entries
 }
 
 func getLogFiles() []string {
-	dir := logger.LogDir()
+	return getLogFilesAt(logger.LogDir())
+}
+
+func getLogFilesAt(dir string) []string {
 	dirEntries, err := os.ReadDir(dir)
-	if err != nil { return nil }
+	if err != nil {
+		return nil
+	}
 	var files []string
 	for _, de := range dirEntries {
 		name := de.Name()
@@ -109,14 +128,22 @@ func aggregateDay(date string, entries []logEntry) DayStats {
 	var totalLatency int64
 	var totalCost, totalBaselineCost float64
 	for _, e := range entries {
-		ts := byTier[e.Tier]; ts.Count++; ts.Cost += e.Cost; byTier[e.Tier] = ts
-		ms := byModel[e.Model]; ms.Count++; ms.Cost += e.Cost; byModel[e.Model] = ms
+		ts := byTier[e.Tier]
+		ts.Count++
+		ts.Cost += e.Cost
+		byTier[e.Tier] = ts
+		ms := byModel[e.Model]
+		ms.Count++
+		ms.Cost += e.Cost
+		byModel[e.Model] = ms
 		totalLatency += e.LatencyMs
 		totalCost += e.Cost
 		totalBaselineCost += e.BaselineCost
 	}
 	avgLat := 0.0
-	if len(entries) > 0 { avgLat = float64(totalLatency) / float64(len(entries)) }
+	if len(entries) > 0 {
+		avgLat = float64(totalLatency) / float64(len(entries))
+	}
 	return DayStats{
 		Date: date, TotalRequests: len(entries), TotalCost: totalCost,
 		TotalBaselineCost: totalBaselineCost, TotalSavings: totalBaselineCost - totalCost,
@@ -126,10 +153,20 @@ func aggregateDay(date string, entries []logEntry) DayStats {
 
 // GetStats reads log files and returns aggregated statistics for the given number of days.
 func GetStats(days int) AggregatedStats {
-	if days <= 0 { days = 7 }
-	logFiles := getLogFiles()
-	if len(logFiles) > days { logFiles = logFiles[:days] }
-	dir := logger.LogDir()
+	return getStats(days, logger.LogDir())
+}
+
+func getStats(days int, dir string) AggregatedStats {
+	if days <= 0 {
+		days = 7
+	}
+	if days > 30 {
+		days = 30
+	}
+	logFiles := getLogFilesAt(dir)
+	if len(logFiles) > days {
+		logFiles = logFiles[:days]
+	}
 	var dailyBreakdown []DayStats
 	allByTier := make(map[string]TierStats)
 	allByModel := make(map[string]ModelStats)
@@ -138,7 +175,9 @@ func GetStats(days int) AggregatedStats {
 	for _, file := range logFiles {
 		date := strings.TrimSuffix(strings.TrimPrefix(file, "usage-"), ".jsonl")
 		entries := parseLogFile(filepath.Join(dir, file))
-		if len(entries) == 0 { continue }
+		if len(entries) == 0 {
+			continue
+		}
 		day := aggregateDay(date, entries)
 		dailyBreakdown = append(dailyBreakdown, day)
 		totalRequests += day.TotalRequests
@@ -146,23 +185,35 @@ func GetStats(days int) AggregatedStats {
 		totalBaselineCost += day.TotalBaselineCost
 		totalLatency += day.AvgLatencyMs * float64(day.TotalRequests)
 		for tier, ts := range day.ByTier {
-			a := allByTier[tier]; a.Count += ts.Count; a.Cost += ts.Cost; allByTier[tier] = a
+			a := allByTier[tier]
+			a.Count += ts.Count
+			a.Cost += ts.Cost
+			allByTier[tier] = a
 		}
 		for model, ms := range day.ByModel {
-			a := allByModel[model]; a.Count += ms.Count; a.Cost += ms.Cost; allByModel[model] = a
+			a := allByModel[model]
+			a.Count += ms.Count
+			a.Cost += ms.Cost
+			allByModel[model] = a
 		}
 	}
 	for k, v := range allByTier {
-		if totalRequests > 0 { v.Percentage = float64(v.Count) / float64(totalRequests) * 100 }
+		if totalRequests > 0 {
+			v.Percentage = float64(v.Count) / float64(totalRequests) * 100
+		}
 		allByTier[k] = v
 	}
 	for k, v := range allByModel {
-		if totalRequests > 0 { v.Percentage = float64(v.Count) / float64(totalRequests) * 100 }
+		if totalRequests > 0 {
+			v.Percentage = float64(v.Count) / float64(totalRequests) * 100
+		}
 		allByModel[k] = v
 	}
 	totalSavings := totalBaselineCost - totalCost
 	savingsPct := 0.0
-	if totalBaselineCost > 0 { savingsPct = totalSavings / totalBaselineCost * 100 }
+	if totalBaselineCost > 0 {
+		savingsPct = totalSavings / totalBaselineCost * 100
+	}
 	avgLatency, avgCost := 0.0, 0.0
 	if totalRequests > 0 {
 		avgLatency = totalLatency / float64(totalRequests)
@@ -170,14 +221,18 @@ func GetStats(days int) AggregatedStats {
 	}
 	var entriesWithBaseline int
 	for _, day := range dailyBreakdown {
-		if day.TotalBaselineCost != day.TotalCost { entriesWithBaseline += day.TotalRequests }
+		if day.TotalBaselineCost != day.TotalCost {
+			entriesWithBaseline += day.TotalRequests
+		}
 	}
 	// Reverse so oldest first.
 	for i, j := 0, len(dailyBreakdown)-1; i < j; i, j = i+1, j-1 {
 		dailyBreakdown[i], dailyBreakdown[j] = dailyBreakdown[j], dailyBreakdown[i]
 	}
 	period := "today"
-	if days != 1 { period = fmt.Sprintf("last %d days", days) }
+	if days != 1 {
+		period = fmt.Sprintf("last %d days", days)
+	}
 	return AggregatedStats{
 		Period: period, TotalRequests: totalRequests, TotalCost: totalCost,
 		TotalBaselineCost: totalBaselineCost, TotalSavings: totalSavings,
@@ -218,7 +273,9 @@ func FormatStatsASCII(s AggregatedStats) string {
 		for _, model := range sortedKeysByCount(s.ByModel) {
 			ms := s.ByModel[model]
 			name := model
-			if len(name) > 25 { name = name[:22] + "..." }
+			if len(name) > 25 {
+				name = name[:22] + "..."
+			}
 			b.WriteString(fmt.Sprintf("|   %-25s %4d  $%7.4f %5.1f%%|\n", name, ms.Count, ms.Cost, ms.Percentage))
 		}
 		b.WriteString(topBot + "\n")
@@ -228,18 +285,28 @@ func FormatStatsASCII(s AggregatedStats) string {
 
 // FormatRecentLogs renders individual log entries as a per-request table.
 func FormatRecentLogs(days, limit int) string {
-	if days <= 0 { days = 1 }
-	if limit <= 0 { limit = 20 }
+	if days <= 0 {
+		days = 1
+	}
+	if limit <= 0 {
+		limit = 20
+	}
 	logFiles := getLogFiles()
-	if len(logFiles) > days { logFiles = logFiles[:days] }
+	if len(logFiles) > days {
+		logFiles = logFiles[:days]
+	}
 	dir := logger.LogDir()
 	var all []logEntry
 	for _, file := range logFiles {
 		all = append(all, parseLogFile(filepath.Join(dir, file))...)
 	}
 	sort.Slice(all, func(i, j int) bool { return all[i].Timestamp > all[j].Timestamp })
-	if len(all) > limit { all = all[:limit] }
-	if len(all) == 0 { return "No recent logs found.\n" }
+	if len(all) > limit {
+		all = all[:limit]
+	}
+	if len(all) == 0 {
+		return "No recent logs found.\n"
+	}
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("Recent Requests (last %d):\n", len(all)))
 	b.WriteString("+-----+----------------------+----------+----------+--------+\n")
@@ -247,7 +314,9 @@ func FormatRecentLogs(days, limit int) string {
 	b.WriteString("+-----+----------------------+----------+----------+--------+\n")
 	for i, e := range all {
 		model := e.Model
-		if len(model) > 20 { model = model[:17] + "..." }
+		if len(model) > 20 {
+			model = model[:17] + "..."
+		}
 		b.WriteString(fmt.Sprintf("| %3d | %-20s | %-8s | $%7.5f | %6d |\n", i+1, model, e.Tier, e.Cost, e.LatencyMs))
 	}
 	b.WriteString("+-----+----------------------+----------+----------+--------+\n")
@@ -259,7 +328,9 @@ func ClearStats() error {
 	dir := logger.LogDir()
 	entries, err := os.ReadDir(dir)
 	if err != nil {
-		if os.IsNotExist(err) { return nil }
+		if os.IsNotExist(err) {
+			return nil
+		}
 		return err
 	}
 	for _, de := range entries {
@@ -272,27 +343,37 @@ func ClearStats() error {
 }
 
 func pad(n int) string {
-	if n <= 0 { return "" }
+	if n <= 0 {
+		return ""
+	}
 	return strings.Repeat(" ", n)
 }
 
 func makeBar(pct float64, maxWidth int) string {
 	filled := int(math.Round(pct / 100.0 * float64(maxWidth)))
-	if filled < 0 { filled = 0 }
-	if filled > maxWidth { filled = maxWidth }
+	if filled < 0 {
+		filled = 0
+	}
+	if filled > maxWidth {
+		filled = maxWidth
+	}
 	return strings.Repeat("#", filled) + strings.Repeat(".", maxWidth-filled)
 }
 
 func sortedKeys(m map[string]TierStats) []string {
 	keys := make([]string, 0, len(m))
-	for k := range m { keys = append(keys, k) }
+	for k := range m {
+		keys = append(keys, k)
+	}
 	sort.Strings(keys)
 	return keys
 }
 
 func sortedKeysByCount(m map[string]ModelStats) []string {
 	keys := make([]string, 0, len(m))
-	for k := range m { keys = append(keys, k) }
+	for k := range m {
+		keys = append(keys, k)
+	}
 	sort.Slice(keys, func(i, j int) bool { return m[keys[i]].Count > m[keys[j]].Count })
 	return keys
 }

@@ -10,10 +10,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"regexp"
-	"sort"
 	"sync"
 	"time"
+
+	"github.com/DOS/DOSRouter/internal/requestkey"
 )
 
 const (
@@ -32,9 +32,6 @@ var skipFields = map[string]bool{
 	"user":       true,
 	"request_id": true,
 }
-
-// timestampRe matches log-style timestamps like "[Mon 2024-01-15 09:30 UTC]".
-var timestampRe = regexp.MustCompile(`^\[\w{3}\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+\w+\]\s*`)
 
 // Entry is a cached response.
 type Entry struct {
@@ -285,7 +282,7 @@ func CacheKey(body []byte) (string, error) {
 		delete(raw, f)
 	}
 
-	canonical := canonicalize(raw)
+	canonical := canonicalize(requestkey.Normalize(raw))
 	encoded, err := json.Marshal(canonical)
 	if err != nil {
 		return "", fmt.Errorf("cache: marshal error: %w", err)
@@ -294,21 +291,16 @@ func CacheKey(body []byte) (string, error) {
 	return hex.EncodeToString(h[:]), nil
 }
 
-// canonicalize recursively sorts object keys and strips timestamp prefixes
-// from string values, producing a deterministic structure for hashing.
+// canonicalize preserves JSON value types while copying nested containers.
+// json.Marshal sorts object keys when encoding the canonical request.
 func canonicalize(v interface{}) interface{} {
 	switch val := v.(type) {
 	case map[string]interface{}:
-		keys := make([]string, 0, len(val))
-		for k := range val {
-			keys = append(keys, k)
+		out := make(map[string]interface{}, len(val))
+		for key, item := range val {
+			out[key] = canonicalize(item)
 		}
-		sort.Strings(keys)
-		pairs := make([][2]interface{}, 0, len(keys))
-		for _, k := range keys {
-			pairs = append(pairs, [2]interface{}{k, canonicalize(val[k])})
-		}
-		return pairs
+		return out
 
 	case []interface{}:
 		out := make([]interface{}, len(val))
@@ -316,9 +308,6 @@ func canonicalize(v interface{}) interface{} {
 			out[i] = canonicalize(item)
 		}
 		return out
-
-	case string:
-		return timestampRe.ReplaceAllString(val, "")
 
 	default:
 		return val

@@ -25,7 +25,7 @@ const (
 
 // retryableStatusCodes are HTTP status codes that trigger a retry.
 var retryableStatusCodes = map[int]bool{
-	http.StatusTooManyRequests:     true, // 429
+	http.StatusTooManyRequests:    true, // 429
 	http.StatusBadGateway:         true, // 502
 	http.StatusServiceUnavailable: true, // 503
 	http.StatusGatewayTimeout:     true, // 504
@@ -38,7 +38,8 @@ type Config struct {
 	// MaxRetries is the maximum number of retry attempts (default 2).
 	MaxRetries int
 	// Client is the HTTP client to use. If nil, http.DefaultClient is used.
-	Client *http.Client
+	Client             *http.Client
+	RetryNetworkErrors bool
 }
 
 // Option configures retry behavior.
@@ -59,10 +60,16 @@ func WithClient(cl *http.Client) Option {
 	return func(c *Config) { c.Client = cl }
 }
 
+// WithNetworkRetries controls retries when no response proves rejection.
+func WithNetworkRetries(enabled bool) Option {
+	return func(c *Config) { c.RetryNetworkErrors = enabled }
+}
+
 func defaultConfig() Config {
 	return Config{
-		BaseDelay:  DefaultBaseDelay,
-		MaxRetries: DefaultMaxRetries,
+		BaseDelay:          DefaultBaseDelay,
+		MaxRetries:         DefaultMaxRetries,
+		RetryNetworkErrors: true,
 	}
 }
 
@@ -87,6 +94,9 @@ func Do(ctx context.Context, buildReq func() (*http.Request, error), opts ...Opt
 	var lastResp *http.Response
 
 	for attempt := 0; attempt <= cfg.MaxRetries; attempt++ {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		req, err := buildReq()
 		if err != nil {
 			return nil, fmt.Errorf("retry: build request: %w", err)
@@ -95,7 +105,7 @@ func Do(ctx context.Context, buildReq func() (*http.Request, error), opts ...Opt
 
 		resp, err := client.Do(req)
 		if err != nil {
-			if !IsRetryableError(err) {
+			if !cfg.RetryNetworkErrors || !IsRetryableError(err) {
 				return nil, err
 			}
 			lastErr = err

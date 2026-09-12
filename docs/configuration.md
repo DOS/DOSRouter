@@ -238,3 +238,26 @@ go build ./...
 go test ./router/ -v
 go test ./router/ -bench=. -benchmem
 ```
+
+
+## Tool-call prose and spending controls
+
+Assistant prose is preserved alongside tool calls. Set
+`DOSROUTER_TOOL_CALL_PROSE=off` to restore legacy prose suppression. Tagged
+thinking is stripped from content, including tags split across streaming chunks.
+Request extensions and tool-call/result IDs survive model rewriting.
+
+The proxy loads amount limits from `~/.openclaw/DOS/spending.json`. Invalid
+state refuses paid dispatch rather than silently clearing limits. Direct and
+routed chat requests reserve estimated cost before dispatch, then record
+settled gateway headers or token-based cost when available. Concurrent pending
+reservations count against session, hourly and daily limits. Explicit upstream
+rejections release a reservation; ambiguous transport failures conservatively
+consume its estimate and are not retried. Unknown-priced models and image
+requests are refused when limits are configured. This is a local estimate-based
+control, not a provider-side USD guarantee or multi-process ledger.
+
+Embedded servers can supply `proxy.Config.SpendControl` to share a controller
+explicitly and `UsageLogger` to direct usage records to their own sink. Defaults
+remain file-backed. No BlockRun account credentials or x402 signer are enabled
+by the sync.
