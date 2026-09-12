@@ -252,9 +252,12 @@ state refuses paid dispatch rather than silently clearing limits. Direct and
 routed chat requests reserve estimated cost before dispatch, then record
 settled gateway headers or token-based cost when available. Concurrent pending
 reservations count against session, hourly and daily limits. Explicit upstream
-client rejections release a reservation unless a settled charge is reported;
-server/transport failures conservatively consume their estimate. Each
-reservation permits one HTTP send; model fallbacks reserve separately. Unknown-priced models and image
+client rejections release a reservation unless a settled charge is reported.
+A valid settled gateway cost header takes priority even on server errors;
+server errors without one conservatively consume their estimate. Transport
+failures with no response consume the estimate and are not retried. Each
+reservation permits one HTTP send; model fallbacks reserve separately.
+Unknown-priced models and image
 requests are refused when limits are configured. This is a local estimate-based
 control, not a provider-side USD guarantee or multi-process ledger.
 

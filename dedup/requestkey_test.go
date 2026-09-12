@@ -120,3 +120,41 @@ func TestHashBodyPreservesTimestampContent(t *testing.T) {
 		})
 	}
 }
+
+func TestHashBodyPreservesNumericLiterals(t *testing.T) {
+	for _, tt := range []struct {
+		name, first, second string
+	}{
+		{"adjacent integers beyond float64 precision", "9007199254740992", "9007199254740993"},
+		{"integer and decimal representation", "1", "1.0"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			first, err := HashBody([]byte(`{"payload":{"number":` + tt.first + `}}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			second, err := HashBody([]byte(`{"payload":{"number":` + tt.second + `}}`))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if first == second {
+				t.Fatalf("distinct numeric literals %s and %s shared a key", tt.first, tt.second)
+			}
+		})
+	}
+}
+
+func TestHashBodyRejectsTrailingJSONValues(t *testing.T) {
+	for _, body := range []string{
+		`{"model":"test/model"} {"model":"second"}`,
+		`{"model":"test/model"} 1`,
+		`{"model":"test/model"} garbage`,
+	} {
+		if key, err := HashBody([]byte(body)); err == nil || key != "" {
+			t.Errorf("trailing JSON data accepted: key=%q err=%v", key, err)
+		}
+	}
+	if _, err := HashBody([]byte("{\"model\":\"test/model\"} \n\t")); err != nil {
+		t.Errorf("valid trailing whitespace rejected: %v", err)
+	}
+}

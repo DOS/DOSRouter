@@ -5,6 +5,7 @@
 package cache
 
 import (
+	"bytes"
 	"container/list"
 	"crypto/sha256"
 	"encoding/hex"
@@ -270,8 +271,13 @@ func (c *Cache) removeLocked(elem *list.Element) {
 // CacheKey returns a hex-encoded SHA-256 hash of the canonicalized request
 // JSON, omitting non-deterministic fields while preserving all content.
 func CacheKey(body []byte) (string, error) {
+	if !json.Valid(body) {
+		return "", fmt.Errorf("cache: invalid JSON body")
+	}
 	var raw map[string]interface{}
-	if err := json.Unmarshal(body, &raw); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&raw); err != nil {
 		return "", fmt.Errorf("cache: invalid JSON body: %w", err)
 	}
 

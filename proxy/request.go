@@ -142,9 +142,26 @@ func (s *Server) writeUsage(entry logger.UsageEntry) {
 	logger.LogUsage(entry)
 }
 
+// requestHasTools recognizes the function-tool contract used by routing and
+// recovery. Unknown provider extensions are forwarded without inferring tool
+// capability from an arbitrary nonempty array.
 func requestHasTools(raw json.RawMessage) bool {
 	var tools []json.RawMessage
-	return json.Unmarshal(raw, &tools) == nil && len(tools) > 0
+	if json.Unmarshal(raw, &tools) != nil {
+		return false
+	}
+	for _, rawTool := range tools {
+		var tool struct {
+			Type     string `json:"type"`
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		}
+		if json.Unmarshal(rawTool, &tool) == nil && tool.Type == "function" && strings.TrimSpace(tool.Function.Name) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 func validTokenCount(value any) (int, bool) {

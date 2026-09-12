@@ -268,7 +268,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 					w.Header().Add(k, v)
 				}
 			}
-			if s.config.UpstreamAPIKey != "" || r.Header.Get("Authorization") != "" {
+			if s.config.UpstreamAPIKey != "" {
 				w.Header().Set("Cache-Control", "no-store")
 			}
 			w.WriteHeader(entry.StatusCode)
@@ -442,11 +442,20 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	var attempts []attemptResult
 	var resp *http.Response
 	var spend *requestSpend
-	defer func() {
-		if spend != nil {
-			spend.finish(nil)
+	accounted := make(map[*requestSpend]bool)
+	finalStatus := "interrupted"
+	finalizeSpend := func(current *requestSpend, status string) {
+		if current == nil || accounted[current] {
+			return
 		}
-	}()
+		current.finish(nil)
+		accounted[current] = true
+		if sessionID != "" {
+			s.sessions.AddSessionCost(sessionID, int64(current.cost*1_000_000))
+		}
+		s.logSettledRequest(current.model, decision, startTime, current, status)
+	}
+	defer func() { finalizeSpend(spend, finalStatus) }()
 	// cancelResp cancels the context of the SUCCESSFUL attempt; it is deferred
 	// after the loop so the chosen response body stays streamable until the
 	// handler returns, then its resources are released.
@@ -469,7 +478,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		// Per-model timeout (upstream v0.12.182): reasoning models get 3min for
 		// cold-start first-token (DeepSeek V4 Pro / Claude opus thinking / GPT-5
 		// reasoning_effort=high can take 60-120s); non-reasoning get 60s. On
-		// timeout the loop falls through to the next model rather than failing.
+		// timeout the request ends without another ambiguous paid send.
 		//
 		// Implemented as cancel-context + AfterFunc (the Go equivalent of
 		// setTimeout/clearTimeout): the timer fires cancel() only if the attempt
@@ -485,7 +494,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			tryErr = nil
 		}
 		if tryErr != nil {
-			currentSpend.finish(nil) // A lost response may already have incurred a charge.
+			finalizeSpend(currentSpend, "error") // A lost response may already have incurred a charge.
 			timer.Stop()
 			cancelAttempt()
 			if tryResp != nil {
@@ -501,9 +510,10 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		if tryResp.StatusCode >= 300 {
 			currentSpend.header = tryResp.Header
 			if _, settled := settledCost(tryResp.Header); settled || tryResp.StatusCode >= 500 {
-				currentSpend.finish(nil)
+				finalizeSpend(currentSpend, "error")
 			} else {
 				currentSpend.release()
+				accounted[currentSpend] = true
 			}
 			errBody, _ := io.ReadAll(tryResp.Body)
 			tryResp.Body.Close()
@@ -557,7 +567,6 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				"models":  len(attempts),
 			},
 		})
-		s.logRequest(resolvedModel, decision, startTime, "error")
 		return
 	}
 	defer resp.Body.Close()
@@ -580,7 +589,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			if copyErr != nil {
 				status = "interrupted"
 			}
-			s.logRequest(resolvedModel, decision, startTime, status)
+			finalStatus = status
 			return
 		}
 
@@ -719,7 +728,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 					s.sessions.SetSession(sessionID, nextModel, decision.Tier, userExplicit)
 				}
 
-				spend.finish(respBody)
+				spend.readUsage(respBody)
+				finalizeSpend(spend, "empty")
 				spend = nil
 				nextSpend, allowed := s.reserveChat(w, req, fbBody, nextModel)
 				if !allowed {
@@ -731,7 +741,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 					fbErr = nil
 				}
 				if fbErr != nil {
-					nextSpend.finish(nil)
+					finalizeSpend(nextSpend, "error")
 					if fbResp != nil {
 						fbResp.Body.Close()
 					}
@@ -744,15 +754,20 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				if fbResp.StatusCode >= 300 {
 					nextSpend.header = fbResp.Header
 					if _, settled := settledCost(fbResp.Header); settled || fbResp.StatusCode >= 500 {
-						nextSpend.finish(nil)
+						finalizeSpend(nextSpend, "error")
 					} else {
 						nextSpend.release()
+						accounted[nextSpend] = true
 					}
 					http.Error(w, "Fallback request rejected", http.StatusBadGateway)
 					return
 				}
 				spend = nextSpend
 				spend.header = fbResp.Header
+				w.Header().Del("X-DOSRouter-Request-Id")
+				if id := gatewayRequestID(fbResp.Header); id != "" {
+					w.Header().Set("X-DOSRouter-Request-Id", id)
+				}
 				respBody, readErr = io.ReadAll(fbResp.Body)
 				if readErr != nil {
 					http.Error(w, "Incomplete fallback response", http.StatusBadGateway)
@@ -864,11 +879,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	spend.finish(nil)
-	if sessionID != "" {
-		s.sessions.AddSessionCost(sessionID, int64(spend.cost*1_000_000))
-	}
-	s.logSettledRequest(resolvedModel, decision, startTime, spend)
+	finalStatus = "success"
 
 }
 

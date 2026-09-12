@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"encoding/json"
+	"log"
 	"math"
 	"net/http"
 	"strconv"
@@ -114,7 +115,10 @@ func (sp *requestSpend) finish(body []byte) {
 		}
 	}
 	// A persistence error keeps the controller fail-closed; never retry a paid call.
-	_ = sp.server.spendControl.Commit(sp.id, sp.cost, sp.model, "chat")
+	if err := sp.server.spendControl.Commit(sp.id, sp.cost, sp.model, "chat"); err != nil {
+		// Backend errors may contain sensitive paths or data; keep the event generic.
+		log.Print("DOSRouter: spend settlement failed; accounting state requires attention")
+	}
 }
 
 func (sp *requestSpend) release() {
@@ -167,8 +171,8 @@ func mediaCost(h http.Header, body []byte) float64 {
 	return 0
 }
 
-func (s *Server) logSettledRequest(model string, decision *router.RoutingDecision, start time.Time, spend *requestSpend) {
-	entry := logger.UsageEntry{Timestamp: time.Now().UTC().Format(time.RFC3339), Model: model, Tier: "DIRECT", Cost: spend.cost, CostSource: spend.source, RequestID: gatewayRequestID(spend.header), InputTokens: spend.input, OutputTokens: spend.output, Status: "success", LatencyMs: time.Since(start).Milliseconds()}
+func (s *Server) logSettledRequest(model string, decision *router.RoutingDecision, start time.Time, spend *requestSpend, status string) {
+	entry := logger.UsageEntry{Timestamp: time.Now().UTC().Format(time.RFC3339), Model: model, Tier: "DIRECT", Cost: spend.cost, CostSource: spend.source, RequestID: gatewayRequestID(spend.header), InputTokens: spend.input, OutputTokens: spend.output, Status: status, LatencyMs: time.Since(start).Milliseconds()}
 	if decision != nil {
 		entry.Tier = string(decision.Tier)
 		entry.BaselineCost = decision.BaselineCost

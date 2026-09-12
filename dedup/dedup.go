@@ -4,6 +4,7 @@
 package dedup
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -158,8 +159,13 @@ func (d *Deduplicator) Len() int {
 // Object keys are sorted recursively while preserving all content and JSON
 // value types, including client-supplied timestamps.
 func HashBody(body []byte) (string, error) {
+	if !json.Valid(body) {
+		return "", fmt.Errorf("dedup: invalid JSON body")
+	}
 	var raw interface{}
-	if err := json.Unmarshal(body, &raw); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&raw); err != nil {
 		return "", fmt.Errorf("dedup: invalid JSON body: %w", err)
 	}
 	canonical := canonicalize(raw)

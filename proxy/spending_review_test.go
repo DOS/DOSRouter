@@ -9,7 +9,9 @@ import (
 	"sync/atomic"
 	"testing"
 
+	"github.com/DOS/DOSRouter/logger"
 	"github.com/DOS/DOSRouter/router"
+	"github.com/DOS/DOSRouter/session"
 	"github.com/DOS/DOSRouter/spendcontrol"
 )
 
@@ -64,6 +66,7 @@ func TestFlatPriceSettlementPreservesCompletionCount(t *testing.T) {
 
 func TestTruncatedEmptyTurnFallbackSettlesReservation(t *testing.T) {
 	var attempts atomic.Int32
+	var logs []logger.UsageEntry
 	const firstModel = "openai/gpt-4o-mini"
 	const nextModel = "openai/gpt-4o"
 	srv, sc := syncTestServer(t, func(w http.ResponseWriter, r *http.Request) {
@@ -79,12 +82,14 @@ func TestTruncatedEmptyTurnFallbackSettlesReservation(t *testing.T) {
 				t.Errorf("first model=%q, want %q", req.Model, firstModel)
 			}
 			w.Header().Set("X-DOS-Cost-USD", "0.125")
+			w.Header().Set("X-DOS-Request-Id", "initial-attempt")
 			io.WriteString(w, `{"choices":[{"message":{"content":""},"finish_reason":"stop"}]}`)
 		case 2:
 			if req.Model != nextModel {
 				t.Errorf("fallback model=%q, want %q", req.Model, nextModel)
 			}
 			w.Header().Set("X-DOS-Cost-USD", "0.25")
+			w.Header().Set("X-DOS-Request-Id", "fallback-attempt")
 			w.Header().Set("Content-Length", "4096")
 			io.WriteString(w, `{"choices":[`)
 		default:
@@ -102,6 +107,7 @@ func TestTruncatedEmptyTurnFallbackSettlesReservation(t *testing.T) {
 			}
 		}
 		cfg.RoutingConfig = &routing
+		cfg.UsageLogger = func(e logger.UsageEntry) { logs = append(logs, e) }
 	})
 	if err := sc.SetLimit(spendcontrol.WindowSession, 1); err != nil {
 		t.Fatal(err)
@@ -109,6 +115,12 @@ func TestTruncatedEmptyTurnFallbackSettlesReservation(t *testing.T) {
 	result := syncTestChat(t, srv, `{"model":"auto","messages":[{"role":"user","content":"hello"}]}`)
 	if result.Code != http.StatusBadGateway || !strings.Contains(result.Body.String(), "Incomplete fallback response") {
 		t.Fatalf("status=%d, body=%q", result.Code, result.Body.String())
+	}
+	if result.Header().Get("X-DOSRouter-Request-Id") != "fallback-attempt" {
+		t.Fatalf("fallback request ID=%q", result.Header().Get("X-DOSRouter-Request-Id"))
+	}
+	if len(logs) != 2 || logs[0].Cost != 0.125 || logs[1].Cost != 0.25 || logs[0].RequestID != "initial-attempt" || logs[1].RequestID != "fallback-attempt" {
+		t.Fatalf("fallback usage logs=%+v", logs)
 	}
 	if attempts.Load() != 2 {
 		t.Fatalf("upstream attempts=%d, want 2", attempts.Load())
@@ -130,19 +142,23 @@ func (w *closedStreamWriter) Write([]byte) (int, error) { return 0, io.ErrClosed
 func TestInterruptedStreamRetainsObservedUsage(t *testing.T) {
 	for _, failure := range []string{"client write", "upstream read"} {
 		t.Run(failure, func(t *testing.T) {
+			var logs []logger.UsageEntry
 			srv, sc := syncTestServer(t, func(w http.ResponseWriter, r *http.Request) {
 				w.Header().Set("Content-Type", "text/event-stream")
 				if failure == "upstream read" {
 					w.Header().Set("Content-Length", "4096")
 				}
 				io.WriteString(w, "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":1000,\"completion_tokens\":500}}\n\n")
-			}, nil)
+			}, func(cfg *Config) { cfg.UsageLogger = func(e logger.UsageEntry) { logs = append(logs, e) } })
+			srv.sessions.Close()
+			srv.sessions = session.NewStore(session.Config{Enabled: true, TimeoutMs: 60000})
 			if err := sc.SetLimit(spendcontrol.WindowSession, 1); err != nil {
 				t.Fatal(err)
 			}
 			const model = "openai/gpt-4o-mini"
 			srv.modelPricing[model] = router.ModelPricing{InputPrice: 1, OutputPrice: 2}
 			request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"`+model+`","stream":true,"messages":[{"role":"user","content":"stream"}]}`))
+			request.Header.Set("x-session-id", "interrupted-session")
 			var writer http.ResponseWriter = httptest.NewRecorder()
 			if failure == "client write" {
 				writer = &closedStreamWriter{httptest.NewRecorder()}
@@ -152,6 +168,12 @@ func TestInterruptedStreamRetainsObservedUsage(t *testing.T) {
 			const expectedCost = 0.002
 			if len(history) != 1 || history[0].Amount != expectedCost {
 				t.Fatalf("observed usage lost on interruption: %+v, want one charge %v", history, expectedCost)
+			}
+			if len(logs) != 1 || logs[0].Cost != expectedCost || logs[0].Status != "interrupted" {
+				t.Fatalf("interrupted usage log=%+v", logs)
+			}
+			if cost := srv.sessions.GetSessionCostUSD("interrupted-session"); cost != expectedCost {
+				t.Fatalf("session cost=%v, want %v", cost, expectedCost)
 			}
 			if spent := sc.GetSpending()[spendcontrol.WindowSession]; spent != expectedCost {
 				t.Fatalf("pending reservation remained: %v", spent)
