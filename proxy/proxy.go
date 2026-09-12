@@ -258,7 +258,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Caller-specific credentials must never share an internal response cache.
-	cacheAllowed := s.config.UpstreamAPIKey != "" || r.Header.Get("Authorization") == ""
+	cacheAllowed := r.Header.Get("Authorization") == ""
 	// --- Response cache check (non-streaming only) ---
 	if !req.Stream && cacheAllowed {
 		if entry, ok := s.cache.Get(body, false); ok {
@@ -465,6 +465,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		if !ok {
 			return
 		}
+		spend = currentSpend
 		// Per-model timeout (upstream v0.12.182): reasoning models get 3min for
 		// cold-start first-token (DeepSeek V4 Pro / Claude opus thinking / GPT-5
 		// reasoning_effort=high can take 60-120s); non-reasoning get 60s. On
@@ -479,7 +480,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		// disconnect still cancels the in-flight attempt.
 		attemptCtx, cancelAttempt := context.WithCancel(r.Context())
 		timer := time.AfterFunc(perModelTimeout(tryModel), cancelAttempt)
-		tryResp, tryErr := retry.Do(attemptCtx, makeReqFor(tryBody), retry.WithClient(s.httpClient), retry.WithNetworkRetries(false))
+		tryResp, tryErr := retry.Do(attemptCtx, makeReqFor(tryBody), retry.WithClient(s.httpClient), retry.WithNetworkRetries(false), retry.WithMaxRetries(0))
 		if tryResp != nil && tryResp.StatusCode >= 300 {
 			tryErr = nil
 		}
@@ -496,9 +497,14 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			attempts = append(attempts, attemptResult{model: tryModel, reason: tryErr.Error()})
 			break
 		}
-		// Provider returned an error status (4xx/5xx except 429 which retry handles)
+		// Settle this attempt before considering a separately reserved fallback.
 		if tryResp.StatusCode >= 300 {
-			currentSpend.release()
+			currentSpend.header = tryResp.Header
+			if _, settled := settledCost(tryResp.Header); settled || tryResp.StatusCode >= 500 {
+				currentSpend.finish(nil)
+			} else {
+				currentSpend.release()
+			}
 			errBody, _ := io.ReadAll(tryResp.Body)
 			tryResp.Body.Close()
 			timer.Stop()
@@ -590,14 +596,11 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				if json.Unmarshal([]byte(line[6:]), &chunk) == nil {
 					// Track usage tokens
 					if u, ok := chunk["usage"].(map[string]interface{}); ok {
-						_, hasInput := u["prompt_tokens"]
-						_, hasOutput := u["completion_tokens"]
-						spend.usageKnown = hasInput && hasOutput
-						if pt, ok := u["prompt_tokens"].(float64); ok {
-							streamInputTok = int(pt)
-						}
-						if ct, ok := u["completion_tokens"].(float64); ok {
-							streamOutputTok = int(ct)
+						pt, inputOK := validTokenCount(u["prompt_tokens"])
+						ct, outputOK := validTokenCount(u["completion_tokens"])
+						if inputOK && outputOK {
+							spend.usageKnown = true
+							streamInputTok, streamOutputTok = pt, ct
 						}
 					}
 					// Preserve tool-call prose by default (upstream v0.12.248).
@@ -721,7 +724,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				if !allowed {
 					return
 				}
-				fbResp, fbErr := retry.Do(r.Context(), makeReqFor(fbBody), retry.WithClient(s.httpClient), retry.WithNetworkRetries(false))
+				spend = nextSpend
+				fbResp, fbErr := retry.Do(r.Context(), makeReqFor(fbBody), retry.WithClient(s.httpClient), retry.WithNetworkRetries(false), retry.WithMaxRetries(0))
 				if fbResp != nil && fbResp.StatusCode >= 300 {
 					fbErr = nil
 				}
@@ -737,7 +741,12 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				}
 				defer fbResp.Body.Close()
 				if fbResp.StatusCode >= 300 {
-					nextSpend.release()
+					nextSpend.header = fbResp.Header
+					if _, settled := settledCost(fbResp.Header); settled || fbResp.StatusCode >= 500 {
+						nextSpend.finish(nil)
+					} else {
+						nextSpend.release()
+					}
 					http.Error(w, "Fallback request rejected", http.StatusBadGateway)
 					return
 				}

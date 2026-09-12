@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/DOS/DOSRouter/internal/requestkey"
 )
 
 const (
@@ -157,14 +155,14 @@ func (d *Deduplicator) Len() int {
 }
 
 // HashBody returns a hex-encoded SHA-256 hash of the canonicalized JSON body.
-// Keys are sorted recursively and timestamp prefixes are stripped from string
-// values.
+// Object keys are sorted recursively while preserving all content and JSON
+// value types, including client-supplied timestamps.
 func HashBody(body []byte) (string, error) {
 	var raw interface{}
 	if err := json.Unmarshal(body, &raw); err != nil {
 		return "", fmt.Errorf("dedup: invalid JSON body: %w", err)
 	}
-	canonical := canonicalize(requestkey.Normalize(raw))
+	canonical := canonicalize(raw)
 	encoded, err := json.Marshal(canonical)
 	if err != nil {
 		return "", fmt.Errorf("dedup: marshal error: %w", err)

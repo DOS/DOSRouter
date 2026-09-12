@@ -19,6 +19,7 @@ type requestSpend struct {
 	model          string
 	estimate, cost float64
 	input, output  int
+	completions    int
 	header         http.Header
 	finished       bool
 	source         string
@@ -77,7 +78,7 @@ func (s *Server) reserveChat(w http.ResponseWriter, req chatRequest, body []byte
 		json.NewEncoder(w).Encode(map[string]any{"error": check.Reason, "blockedBy": check.BlockedBy, "remaining": check.Remaining})
 		return nil, false
 	}
-	return &requestSpend{server: s, id: id, model: model, estimate: estimate, cost: estimate, source: "estimate"}, true
+	return &requestSpend{server: s, id: id, model: model, estimate: estimate, cost: estimate, source: "estimate", completions: n}, true
 }
 
 func (sp *requestSpend) readUsage(body []byte) {
@@ -107,7 +108,7 @@ func (sp *requestSpend) finish(body []byte) {
 		if p, ok := sp.server.modelPricing[sp.model]; ok {
 			sp.cost = (float64(sp.input)*p.InputPrice + float64(sp.output)*p.OutputPrice) / 1_000_000
 			if p.FlatPrice != nil {
-				sp.cost = *p.FlatPrice
+				sp.cost = *p.FlatPrice * float64(sp.completions)
 			}
 			sp.source = "tokens"
 		}

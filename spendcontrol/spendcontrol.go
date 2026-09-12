@@ -428,7 +428,7 @@ func (fs *FileSpendControlStorage) Save(state persistedState) error {
 	if err != nil {
 		return err
 	}
-	defer os.Remove(file.Name())
+	defer func() { _ = os.Remove(file.Name()) }()
 	if _, err = file.Write(data); err == nil {
 		err = file.Sync()
 	}

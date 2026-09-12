@@ -3,6 +3,7 @@ package proxy
 import (
 	"encoding/json"
 	"fmt"
+	"math"
 	"net/url"
 	"os"
 	"strings"
@@ -144,4 +145,12 @@ func (s *Server) writeUsage(entry logger.UsageEntry) {
 func requestHasTools(raw json.RawMessage) bool {
 	var tools []json.RawMessage
 	return json.Unmarshal(raw, &tools) == nil && len(tools) > 0
+}
+
+func validTokenCount(value any) (int, bool) {
+	number, ok := value.(float64)
+	if !ok || number < 0 || math.IsNaN(number) || math.IsInf(number, 0) || math.Trunc(number) != number || number >= float64(int(^uint(0)>>1)) {
+		return 0, false
+	}
+	return int(number), true
 }

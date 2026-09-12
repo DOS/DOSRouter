@@ -147,3 +147,65 @@ func TestSyncedVisionAndExplicitAliases(t *testing.T) {
 		}
 	}
 }
+
+func TestRetiredFreeShorthandsResolveActiveSuccessor(t *testing.T) {
+	aliases := []string{
+		"maverick", "mistral-large", "mistral-large-3-675b", "mistral-nemotron",
+		"qwen3-122b", "qwen3-next-80b", "qwen3.5-122b",
+		"seed-oss", "seed-oss-36b", "step-flash", "step-3.7-flash",
+	}
+	for _, alias := range aliases {
+		for _, prefix := range []string{"", "dosrouter/", "blockrun/", "openai/"} {
+			t.Run(prefix+alias, func(t *testing.T) {
+				resolved := ResolveModelAlias(prefix + alias)
+				if resolved != "free/nemotron-3.5-lightning" {
+					t.Fatalf("resolved = %q, want active free successor", resolved)
+				}
+				model := GetModel(resolved)
+				if model == nil || model.Deprecated || model.InputPrice != 0 || model.OutputPrice != 0 {
+					t.Errorf("free shorthand %q resolved to unavailable or paid metadata: %+v", alias, model)
+				}
+			})
+		}
+	}
+	// The proxy resolves aliases once and does not interpret FallbackModel.
+	// A future free shorthand must therefore target an active row immediately.
+	for alias, target := range ModelAliases {
+		if strings.Contains(alias, "/") || !strings.HasPrefix(target, "free/") {
+			continue
+		}
+		model := GetModel(target)
+		if model == nil || model.Deprecated {
+			t.Errorf("free shorthand %q still targets missing/retired model %q", alias, target)
+		}
+	}
+}
+
+func TestRetiredAliasFixPreservesQualifiedAndPaidVersionPins(t *testing.T) {
+	pins := map[string]string{
+		"free/step-3.7-flash":                 "free/step-3.7-flash",
+		"free/mistral-nemotron":               "free/mistral-nemotron",
+		"free/qwen3.5-122b-a10b":              "free/qwen3.5-122b-a10b",
+		"nvidia/glm-4.7":                      "free/glm-4.7",
+		"nvidia/llama-4-maverick":             "free/llama-4-maverick",
+		"nvidia/mistral-nemotron":             "free/mistral-nemotron",
+		"nvidia/nemotron-nano-12b-v2-vl":      "free/nemotron-nano-12b-v2-vl",
+		"nvidia/nemotron-nano-9b-v2":          "free/nemotron-nano-9b-v2",
+		"nvidia/qwen3-coder-480b":             "free/qwen3-coder-480b",
+		"nvidia/qwen3-next-80b-a3b-instruct":  "free/qwen3-next-80b-a3b-instruct",
+		"nvidia/qwen3-next-80b-a3b-thinking":  "free/qwen3-next-80b-a3b-instruct",
+		"nvidia/qwen3.5-122b-a10b":            "free/qwen3.5-122b-a10b",
+		"nvidia/seed-oss-36b":                 "free/seed-oss-36b",
+		"nvidia/step-3.7-flash":               "free/step-3.7-flash",
+		"qwen/qwen3-coder-480b-a35b-instruct": "free/qwen3-coder-480b",
+		"minimax-m2.5":                        "minimax/minimax-m2.5",
+		"minimax/minimax-m2.5":                "minimax/minimax-m2.5",
+	}
+	for pin, want := range pins {
+		for _, prefix := range []string{"", "dosrouter/", "blockrun/"} {
+			if got := ResolveModelAlias(prefix + pin); got != want {
+				t.Errorf("ResolveModelAlias(%q) = %q, want preserved pin %q", prefix+pin, got, want)
+			}
+		}
+	}
+}

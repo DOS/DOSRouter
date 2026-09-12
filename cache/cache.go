@@ -1,7 +1,7 @@
 // Package cache provides a TTL + LRU response cache for LLM completions.
 // Cache keys are derived from canonicalized request JSON, skipping
-// non-deterministic fields (stream, user, request_id) and stripping
-// timestamp prefixes from message content.
+// non-deterministic fields (stream, user, request_id) while preserving
+// all message content, including client-supplied timestamps.
 package cache
 
 import (
@@ -12,8 +12,6 @@ import (
 	"fmt"
 	"sync"
 	"time"
-
-	"github.com/DOS/DOSRouter/internal/requestkey"
 )
 
 const (
@@ -270,7 +268,7 @@ func (c *Cache) removeLocked(elem *list.Element) {
 }
 
 // CacheKey returns a hex-encoded SHA-256 hash of the canonicalized request
-// JSON, omitting non-deterministic fields and stripping timestamps.
+// JSON, omitting non-deterministic fields while preserving all content.
 func CacheKey(body []byte) (string, error) {
 	var raw map[string]interface{}
 	if err := json.Unmarshal(body, &raw); err != nil {
@@ -282,7 +280,7 @@ func CacheKey(body []byte) (string, error) {
 		delete(raw, f)
 	}
 
-	canonical := canonicalize(requestkey.Normalize(raw))
+	canonical := canonicalize(raw)
 	encoded, err := json.Marshal(canonical)
 	if err != nil {
 		return "", fmt.Errorf("cache: marshal error: %w", err)

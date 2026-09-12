@@ -45,12 +45,17 @@ func (f *proseFilter) filter(text string, final bool) string {
 		if match := thinkingTag.FindStringSubmatch(tag); match != nil {
 			f.hidden = match[1] != "/"
 		} else if strings.HasPrefix(tag, "<|") || strings.HasPrefix(tag, "<｜") {
-			lower := strings.ToLower(tag)
-			if strings.Contains(lower, "begin") {
+			token := strings.ToLower(strings.Trim(tag, "<>|｜"))
+			token = strings.ReplaceAll(token, "▁", "_")
+			switch token {
+			case "begin_of_thinking", "thinking":
 				f.hidden = true
-			}
-			if strings.Contains(lower, "end") {
+			case "end_of_thinking":
 				f.hidden = false
+			default:
+				if !f.hidden {
+					out.WriteString(tag)
+				}
 			}
 		} else if !f.hidden {
 			out.WriteString(tag)

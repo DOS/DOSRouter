@@ -43,12 +43,12 @@ update, not a claim that every BlockRun product feature is implemented.
 | --- | --- |
 | v0.12.248 assistant/tool prose | Preserve assistant prose with native calls and text-recovered calls; strip tagged thinking, including split SSE tags. `DOSROUTER_TOOL_CALL_PROSE=off` restores legacy suppression. Recover syntax only when tools are supplied. |
 | v0.12.252 tool-pair safety | Preserve `tool_calls`, `tool_call_id`, names and all provider extension fields during request rewriting. Avoid compressing protocol-bearing or multimodal messages. DOSRouter has no upstream-style message truncation path. |
-| v0.12.254-256 cancellation/cache | Keep Go request contexts through chat/image requests, stop fallback after disconnect, reject incomplete bodies, normalize injected first-text timestamps without merging distinct user data. |
+| v0.12.254-256 cancellation/cache | Keep Go request contexts through chat/image requests, stop fallback after disconnect, reject incomplete bodies, preserve caller-controlled timestamp content in cache keys; normalize JSON object key order without conflating arrays. |
 | v0.12.257-278 models/routing | Align chat catalog metadata and all four profile chains with router-core `5ee7c23c993013a8052588191569db5cf7fb793c`; retain DOS aliases and exact explicit pins. Retire dead free defaults, fix capability claims and prices. |
 | v0.12.263/269/274 spend safety | Atomic in-flight reservations for direct and routed chat, including fallback attempts; pending spend counts in rolling/session caps. Persist snapshots serially with atomic file replacement. Invalid state/cost fails closed. Each Server uses one controller; embedded callers may inject a shared controller explicitly. |
-| v0.12.267 ambiguous sends | Do not repeat a chat send or switch models after an ambiguous transport failure. Explicit retryable HTTP rejection statuses retain backoff/retry. DOSRouter does not yet sign x402 payments. |
+| v0.12.267 ambiguous sends | Do not repeat a chat send or switch models after an ambiguous transport failure. Each reservation authorizes one HTTP send. Status retries are disabled; model fallback obtains a separate reservation and ambiguous server errors retain their estimate. DOSRouter does not yet sign x402 payments. |
 | v0.12.271-275 accounting/health | Prefer settled gateway cost headers, otherwise actual token usage, then explicitly labelled estimates. Capture gateway request IDs in usage logs; report the configured gateway origin in health. Image cost reads headers/body. Reject unknown-priced images when amount limits are configured. |
-| v0.12.272 credential transport | Refuse upstream redirects, avoid shared internal caching across caller-supplied bearer credentials, and mark authenticated responses `no-store`. |
+| v0.12.272 credential transport | Refuse upstream redirects, avoid shared internal caching across caller-supplied bearer credentials (including a configured upstream key), and mark authenticated responses `no-store`. |
 | Stats day windows | Go already defaulted nonpositive windows safely; cap aggregate reporting to 30 days and test using isolated log directories. |
 | Validation adaptation | Replace stale TypeScript/npm CI and missing Docker scanner targets with Go build, vet, race tests and govulncheck. Preserve job/workflow names and automatic CodeQL; prefer patched Go 1.26.6 via the toolchain directive. Dependabot follows Go modules and Actions. |
 
@@ -57,6 +57,8 @@ update, not a claim that every BlockRun product feature is implemented.
 metadata reflects upstream source, not independently probed DOS providers.
 Gemini 3.6/3.8 Flash's $0.75/$3.75 promotional rates end on 2027-01-01,
 when upstream documents $1.50/$7.50; automated repricing is not implemented.
+
+**Intentional divergence:** The upstream timestamp-stripping optimization is not enabled: a standalone server cannot distinguish injected prefixes from client-authored content. Cache/dedup keys preserve both string and first text-block timestamps until trusted injection provenance exists.
 
 **Already satisfied:** `/v1/models` lists active catalog entries; chat and image
 requests derive their context from the client; full health performs no balance
