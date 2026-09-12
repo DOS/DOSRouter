@@ -149,3 +149,22 @@ func TestPaidStatusResponseDoesNotRepeatSameReservation(t *testing.T) {
 		}
 	}
 }
+
+func TestStreamingComparisonDoesNotBufferOrdinaryProse(t *testing.T) {
+	var filter proseFilter
+	for _, chunk := range []string{"x < y", " and another ", "condition holds."} {
+		if got := filter.filter(chunk, false); got != chunk {
+			t.Fatalf("chunk=%q, got=%q before stream completion", chunk, got)
+		}
+	}
+	var split proseFilter
+	if got := split.filter("Visible <thi", false); got != "Visible " {
+		t.Fatalf("partial tag output=%q", got)
+	}
+	if got := split.filter("nk>private</th", false); got != "" {
+		t.Fatalf("private content leaked=%q", got)
+	}
+	if got := split.filter("ink>Final", false); got != "Final" {
+		t.Fatalf("closing tag output=%q", got)
+	}
+}
