@@ -4,12 +4,11 @@
 package dedup
 
 import (
+	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
-	"regexp"
-	"sort"
 	"sync"
 	"time"
 )
@@ -20,9 +19,6 @@ const (
 	// DefaultMaxBodySize is the max response body size to cache (1 MB).
 	DefaultMaxBodySize = 1 << 20
 )
-
-// timestampRe matches log-style timestamps like "[Mon 2024-01-15 09:30 UTC]".
-var timestampRe = regexp.MustCompile(`^\[\w{3}\s+\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}\s+\w+\]\s*`)
 
 // Response holds a cached upstream response.
 type Response struct {
@@ -160,11 +156,16 @@ func (d *Deduplicator) Len() int {
 }
 
 // HashBody returns a hex-encoded SHA-256 hash of the canonicalized JSON body.
-// Keys are sorted recursively and timestamp prefixes are stripped from string
-// values.
+// Object keys are sorted recursively while preserving all content and JSON
+// value types, including client-supplied timestamps.
 func HashBody(body []byte) (string, error) {
+	if !json.Valid(body) {
+		return "", fmt.Errorf("dedup: invalid JSON body")
+	}
 	var raw interface{}
-	if err := json.Unmarshal(body, &raw); err != nil {
+	decoder := json.NewDecoder(bytes.NewReader(body))
+	decoder.UseNumber()
+	if err := decoder.Decode(&raw); err != nil {
 		return "", fmt.Errorf("dedup: invalid JSON body: %w", err)
 	}
 	canonical := canonicalize(raw)
@@ -176,23 +177,16 @@ func HashBody(body []byte) (string, error) {
 	return hex.EncodeToString(h[:]), nil
 }
 
-// canonicalize recursively sorts object keys and strips timestamp prefixes
-// from string values.
+// canonicalize preserves JSON value types while copying nested containers.
+// json.Marshal sorts object keys when encoding the canonical request.
 func canonicalize(v interface{}) interface{} {
 	switch val := v.(type) {
 	case map[string]interface{}:
-		keys := make([]string, 0, len(val))
-		for k := range val {
-			keys = append(keys, k)
+		out := make(map[string]interface{}, len(val))
+		for key, item := range val {
+			out[key] = canonicalize(item)
 		}
-		sort.Strings(keys)
-		// Use an ordered representation: []interface{} of [key, value] pairs.
-		// This ensures json.Marshal produces a deterministic byte sequence.
-		pairs := make([][2]interface{}, 0, len(keys))
-		for _, k := range keys {
-			pairs = append(pairs, [2]interface{}{k, canonicalize(val[k])})
-		}
-		return pairs
+		return out
 
 	case []interface{}:
 		out := make([]interface{}, len(val))
@@ -200,9 +194,6 @@ func canonicalize(v interface{}) interface{} {
 			out[i] = canonicalize(item)
 		}
 		return out
-
-	case string:
-		return timestampRe.ReplaceAllString(val, "")
 
 	default:
 		return val

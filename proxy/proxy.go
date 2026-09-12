@@ -61,6 +61,10 @@ type Config struct {
 	UpstreamAPIKey string
 	// Routing config override (nil = use default)
 	RoutingConfig *router.RoutingConfig
+	// SpendControl overrides the file-backed controller (useful for embedded servers).
+	SpendControl *spendcontrol.SpendControl
+	// UsageLogger overrides usage logging.
+	UsageLogger func(logger.UsageEntry)
 }
 
 // Server is the OpenAI-compatible proxy with smart routing.
@@ -76,6 +80,7 @@ type Server struct {
 	sessions     *session.Store
 	journal      *journal.SessionJournal
 	spendControl *spendcontrol.SpendControl
+	spendError   error
 
 	// Deferred startup for OpenClaw plugin config (upstream v0.12.142)
 	// When OpenClaw calls Register() twice, the first call has empty pluginConfig.
@@ -92,21 +97,30 @@ func New(cfg Config) *Server {
 		rc = *cfg.RoutingConfig
 	}
 
+	transport := http.DefaultTransport
+	if standard, ok := transport.(*http.Transport); ok {
+		transport = standard.Clone()
+	}
+	sc := cfg.SpendControl
+	var spendErr error
+	if sc == nil {
+		sc, spendErr = spendcontrol.New(spendcontrol.NewFileStorage())
+	}
 	return &Server{
 		config:        cfg,
 		routingConfig: rc,
 		modelPricing:  models.BuildPricingMap(),
 		httpClient: &http.Client{
-			Timeout: 5 * time.Minute,
-			Transport: &http.Transport{
-				Proxy: http.ProxyFromEnvironment,
-			},
+			Timeout:       5 * time.Minute,
+			Transport:     transport,
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 		dedup:        dedup.New(),
 		cache:        cache.New(),
 		sessions:     session.NewStore(session.DefaultConfig()),
 		journal:      journal.New(journal.DefaultConfig()),
-		spendControl: mustSpendControl(),
+		spendControl: sc,
+		spendError:   spendErr,
 	}
 }
 
@@ -186,18 +200,20 @@ func (s *Server) ListenAndServe() error {
 
 // chatRequest is the OpenAI-compatible request format.
 type chatRequest struct {
-	Model       string          `json:"model"`
-	Messages    []chatMessage   `json:"messages"`
-	MaxTokens   int             `json:"max_tokens,omitempty"`
-	Temperature *float64        `json:"temperature,omitempty"`
-	Stream      bool            `json:"stream,omitempty"`
-	Tools       json.RawMessage `json:"tools,omitempty"`
+	Model       string                     `json:"model"`
+	Messages    []chatMessage              `json:"messages"`
+	MaxTokens   int                        `json:"max_tokens,omitempty"`
+	Temperature *float64                   `json:"temperature,omitempty"`
+	Stream      bool                       `json:"stream,omitempty"`
+	Tools       json.RawMessage            `json:"tools,omitempty"`
+	Extra       map[string]json.RawMessage `json:"-"`
 }
 
 type chatMessage struct {
-	Role             string          `json:"role"`
-	Content          json.RawMessage `json:"content"`
-	ReasoningContent *string         `json:"reasoning_content,omitempty"`
+	Role             string                     `json:"role"`
+	Content          json.RawMessage            `json:"content"`
+	ReasoningContent *string                    `json:"reasoning_content,omitempty"`
+	Extra            map[string]json.RawMessage `json:"-"`
 }
 
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
@@ -214,6 +230,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	defer r.Body.Close()
 
+	cacheBody := append([]byte(nil), body...)
 	var req chatRequest
 	if err := json.Unmarshal(body, &req); err != nil {
 		http.Error(w, "Invalid JSON", http.StatusBadRequest)
@@ -240,14 +257,19 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Caller-specific credentials must never share an internal response cache.
+	cacheAllowed := r.Header.Get("Authorization") == ""
 	// --- Response cache check (non-streaming only) ---
-	if !req.Stream {
+	if !req.Stream && cacheAllowed {
 		if entry, ok := s.cache.Get(body, false); ok {
 			w.Header().Set("X-DOSRouter-Cache", "hit")
 			for k, vs := range entry.Header {
 				for _, v := range vs {
 					w.Header().Add(k, v)
 				}
+			}
+			if s.config.UpstreamAPIKey != "" {
+				w.Header().Set("Cache-Control", "no-store")
 			}
 			w.WriteHeader(entry.StatusCode)
 			w.Write(entry.Body)
@@ -302,7 +324,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			Config:         s.routingConfig,
 			ModelPricing:   s.modelPricing,
 			RoutingProfile: routingProfile,
-			HasTools:       len(req.Tools) > 0,
+			HasTools:       requestHasTools(req.Tools),
 		})
 		if err != nil {
 			http.Error(w, "Routing error: "+err.Error(), http.StatusInternalServerError)
@@ -310,22 +332,6 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 		decision = &d
 		resolvedModel = d.Model
-
-		// --- Spend control check ---
-		if decision.CostEstimate > 0 {
-			check := s.spendControl.Check(decision.CostEstimate)
-			if !check.Allowed {
-				w.Header().Set("Content-Type", "application/json")
-				w.WriteHeader(http.StatusTooManyRequests)
-				json.NewEncoder(w).Encode(map[string]interface{}{
-					"error":     check.Reason,
-					"blockedBy": check.BlockedBy,
-					"remaining": check.Remaining,
-					"resetIn":   check.ResetIn,
-				})
-				return
-			}
-		}
 
 		// Pin to session (smart-routed, not user-explicit)
 		if sessionID != "" {
@@ -351,12 +357,13 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 	// --- Context compression (if enabled) ---
 	compMsgs := toNormalizedMessages(req.Messages)
-	if compression.ShouldCompress(compMsgs) {
+	if canCompressMessages(req.Messages) && compression.ShouldCompress(compMsgs) {
 		result := compression.CompressContext(compMsgs, compression.DefaultCompressionConfig())
 		if result.Stats.Ratio < 0.95 && result.Stats.Ratio > 0 {
 			// Re-marshal with compressed messages
 			compReq := req
 			compReq.Messages = fromNormalizedMessages(result.Messages)
+			req.Messages = compReq.Messages
 			if b, err := json.Marshal(compReq); err == nil {
 				body = b // Use compressed body for upstream
 			}
@@ -394,7 +401,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("X-DOSRouter-Confidence", fmt.Sprintf("%.2f", decision.Confidence))
 		w.Header().Set("X-DOSRouter-Savings", fmt.Sprintf("%.0f%%", decision.Savings*100))
 		w.Header().Set("X-DOSRouter-Profile", decision.Profile)
-		w.Header().Set("X-DOSRouter-Reasoning", decision.Reasoning)
+		w.Header().Set("X-DOSRouter-Reasoning", sanitizeHeaderValue(decision.Reasoning))
 		if decision.CostEstimate > 0 {
 			w.Header().Set("X-DOSRouter-Cost", fmt.Sprintf("%.6f", decision.CostEstimate))
 		}
@@ -434,18 +441,44 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	var attempts []attemptResult
 	var resp *http.Response
+	var spend *requestSpend
+	accounted := make(map[*requestSpend]bool)
+	finalStatus := "interrupted"
+	finalizeSpend := func(current *requestSpend, status string) {
+		if current == nil || accounted[current] {
+			return
+		}
+		current.finish(nil)
+		accounted[current] = true
+		if sessionID != "" {
+			s.sessions.AddSessionCost(sessionID, int64(current.cost*1_000_000))
+		}
+		s.logSettledRequest(current.model, decision, startTime, current, status)
+	}
+	defer func() { finalizeSpend(spend, finalStatus) }()
 	// cancelResp cancels the context of the SUCCESSFUL attempt; it is deferred
 	// after the loop so the chosen response body stays streamable until the
 	// handler returns, then its resources are released.
 	var cancelResp context.CancelFunc
 
 	for _, tryModel := range fallbackChain {
+		if r.Context().Err() != nil {
+			return
+		}
+		if req.MaxTokens <= 0 && req.Extra["max_completion_tokens"] == nil && s.spendControl != nil && len(s.spendControl.GetLimits()) > 0 {
+			req.MaxTokens = 4096
+		}
 		req.Model = tryModel
 		tryBody, _ := json.Marshal(req)
+		currentSpend, ok := s.reserveChat(w, req, tryBody, tryModel)
+		if !ok {
+			return
+		}
+		spend = currentSpend
 		// Per-model timeout (upstream v0.12.182): reasoning models get 3min for
 		// cold-start first-token (DeepSeek V4 Pro / Claude opus thinking / GPT-5
 		// reasoning_effort=high can take 60-120s); non-reasoning get 60s. On
-		// timeout the loop falls through to the next model rather than failing.
+		// timeout the request ends without another ambiguous paid send.
 		//
 		// Implemented as cancel-context + AfterFunc (the Go equivalent of
 		// setTimeout/clearTimeout): the timer fires cancel() only if the attempt
@@ -456,15 +489,32 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		// disconnect still cancels the in-flight attempt.
 		attemptCtx, cancelAttempt := context.WithCancel(r.Context())
 		timer := time.AfterFunc(perModelTimeout(tryModel), cancelAttempt)
-		tryResp, tryErr := retry.Do(attemptCtx, makeReqFor(tryBody), retry.WithClient(s.httpClient))
+		tryResp, tryErr := retry.Do(attemptCtx, makeReqFor(tryBody), retry.WithClient(s.httpClient), retry.WithNetworkRetries(false), retry.WithMaxRetries(0))
+		if tryResp != nil && tryResp.StatusCode >= 300 {
+			tryErr = nil
+		}
 		if tryErr != nil {
+			finalizeSpend(currentSpend, "error") // A lost response may already have incurred a charge.
 			timer.Stop()
 			cancelAttempt()
+			if tryResp != nil {
+				tryResp.Body.Close()
+			}
+			if r.Context().Err() != nil {
+				return
+			}
 			attempts = append(attempts, attemptResult{model: tryModel, reason: tryErr.Error()})
-			continue
+			break
 		}
-		// Provider returned an error status (4xx/5xx except 429 which retry handles)
-		if tryResp.StatusCode >= 400 {
+		// Settle this attempt before considering a separately reserved fallback.
+		if tryResp.StatusCode >= 300 {
+			currentSpend.header = tryResp.Header
+			if _, settled := settledCost(tryResp.Header); settled || tryResp.StatusCode >= 500 {
+				finalizeSpend(currentSpend, "error")
+			} else {
+				currentSpend.release()
+				accounted[currentSpend] = true
+			}
 			errBody, _ := io.ReadAll(tryResp.Body)
 			tryResp.Body.Close()
 			timer.Stop()
@@ -488,6 +538,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		timer.Stop()
 		cancelResp = cancelAttempt
 		resp = tryResp
+		spend = currentSpend
+		spend.header = resp.Header
 		resolvedModel = tryModel
 		if tryModel != fallbackChain[0] {
 			w.Header().Set("X-DOSRouter-Fallback", tryModel)
@@ -515,12 +567,13 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				"models":  len(attempts),
 			},
 		})
-		s.logRequest(resolvedModel, decision, startTime, "error")
 		return
 	}
 	defer resp.Body.Close()
 
-	latencyMs := time.Since(startTime).Milliseconds()
+	if id := gatewayRequestID(resp.Header); id != "" {
+		w.Header().Set("X-DOSRouter-Request-Id", id)
+	}
 
 	// Stream response back
 	if req.Stream {
@@ -531,14 +584,19 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 
 		flusher, ok := w.(http.Flusher)
 		if !ok {
-			io.Copy(w, resp.Body)
-			s.logRequest(resolvedModel, decision, startTime, "success")
+			_, copyErr := io.Copy(w, resp.Body)
+			status := "success"
+			if copyErr != nil {
+				status = "interrupted"
+			}
+			finalStatus = status
 			return
 		}
 
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 		var streamInputTok, streamOutputTok int
+		proseFilters := make(map[int]*proseFilter)
 		for scanner.Scan() {
 			line := scanner.Text()
 			// Parse and rewrite streaming chunks: inject model name + track usage
@@ -547,17 +605,16 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				if json.Unmarshal([]byte(line[6:]), &chunk) == nil {
 					// Track usage tokens
 					if u, ok := chunk["usage"].(map[string]interface{}); ok {
-						if pt, ok := u["prompt_tokens"].(float64); ok {
-							streamInputTok = int(pt)
-						}
-						if ct, ok := u["completion_tokens"].(float64); ok {
-							streamOutputTok = int(ct)
+						pt, inputOK := validTokenCount(u["prompt_tokens"])
+						ct, outputOK := validTokenCount(u["completion_tokens"])
+						if inputOK && outputOK {
+							spend.input, spend.output = pt, ct
+							spend.usageKnown = true
+							streamInputTok, streamOutputTok = pt, ct
 						}
 					}
-					// Strip tool-call planning prose from streamed delta content
-					// (upstream v0.12.165/166/169): blank delta.content when the
-					// chunk carries tool_calls or finish_reason=tool_calls, so
-					// planning prose is not forwarded to chat channels.
+					// Preserve tool-call prose by default (upstream v0.12.248).
+					// The operator can opt back into suppression.
 					mutated := false
 					if choices, ok := chunk["choices"].([]interface{}); ok {
 						for _, c := range choices {
@@ -565,7 +622,22 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 							if !ok {
 								continue
 							}
-							if choiceEndsWithToolCalls(choice) {
+							if delta, ok := choice["delta"].(map[string]interface{}); ok {
+								index, _ := choice["index"].(float64)
+								f := proseFilters[int(index)]
+								if f == nil {
+									f = &proseFilter{}
+									proseFilters[int(index)] = f
+								}
+								content, _ := delta["content"].(string)
+								finish, _ := choice["finish_reason"].(string)
+								cleaned := f.filter(content, finish != "")
+								if cleaned != content {
+									delta["content"] = cleaned
+									mutated = true
+								}
+							}
+							if choiceEndsWithToolCalls(choice) && !forwardToolCallProse() {
 								if delta, ok := choice["delta"].(map[string]interface{}); ok {
 									if s, _ := delta["content"].(string); s != "" {
 										delta["content"] = ""
@@ -609,17 +681,31 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 							},
 						}
 						if b, err := json.Marshal(usageChunk); err == nil {
-							fmt.Fprintf(w, "data: %s\n\n", b)
+							if _, err := fmt.Fprintf(w, "data: %s\n\n", b); err != nil {
+								return
+							}
 							flusher.Flush()
 						}
 					}
 				}
 			}
-			fmt.Fprintf(w, "%s\n", line)
+			if _, err := fmt.Fprintf(w, "%s\n", line); err != nil {
+				return
+			}
 			flusher.Flush()
 		}
+		if scanner.Err() != nil || r.Context().Err() != nil {
+			return
+		}
+		spend.input, spend.output = streamInputTok, streamOutputTok
 	} else {
-		respBody, _ := io.ReadAll(resp.Body)
+		respBody, readErr := io.ReadAll(resp.Body)
+		if readErr != nil {
+			if r.Context().Err() == nil {
+				http.Error(w, "Incomplete upstream response", http.StatusBadGateway)
+			}
+			return
+		}
 
 		// --- Empty turn fallback detection ---
 		// If the response has empty content, no tool_calls, and finish_reason "stop",
@@ -634,7 +720,6 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			}
 			if nextModel != "" {
 				log.Printf("degraded response: empty turn from %s, falling back to %s", resolvedModel, nextModel)
-				resolvedModel = nextModel
 				req.Model = nextModel
 				fbBody, _ := json.Marshal(req)
 
@@ -643,36 +728,69 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 					s.sessions.SetSession(sessionID, nextModel, decision.Tier, userExplicit)
 				}
 
-				fbResp, fbErr := retry.Do(r.Context(), makeReqFor(fbBody), retry.WithClient(s.httpClient))
-				if fbErr == nil {
-					defer fbResp.Body.Close()
-					respBody, _ = io.ReadAll(fbResp.Body)
-					resp = fbResp
-					w.Header().Set("X-DOSRouter-Fallback", nextModel)
-					w.Header().Set("X-DOSRouter-Model", nextModel)
+				spend.readUsage(respBody)
+				finalizeSpend(spend, "empty")
+				spend = nil
+				nextSpend, allowed := s.reserveChat(w, req, fbBody, nextModel)
+				if !allowed {
+					return
 				}
+				spend = nextSpend
+				fbResp, fbErr := retry.Do(r.Context(), makeReqFor(fbBody), retry.WithClient(s.httpClient), retry.WithNetworkRetries(false), retry.WithMaxRetries(0))
+				if fbResp != nil && fbResp.StatusCode >= 300 {
+					fbErr = nil
+				}
+				if fbErr != nil {
+					finalizeSpend(nextSpend, "error")
+					if fbResp != nil {
+						fbResp.Body.Close()
+					}
+					if r.Context().Err() == nil {
+						http.Error(w, "Fallback request failed", http.StatusBadGateway)
+					}
+					return
+				}
+				defer fbResp.Body.Close()
+				if fbResp.StatusCode >= 300 {
+					nextSpend.header = fbResp.Header
+					if _, settled := settledCost(fbResp.Header); settled || fbResp.StatusCode >= 500 {
+						finalizeSpend(nextSpend, "error")
+					} else {
+						nextSpend.release()
+						accounted[nextSpend] = true
+					}
+					http.Error(w, "Fallback request rejected", http.StatusBadGateway)
+					return
+				}
+				spend = nextSpend
+				spend.header = fbResp.Header
+				w.Header().Del("X-DOSRouter-Request-Id")
+				if id := gatewayRequestID(fbResp.Header); id != "" {
+					w.Header().Set("X-DOSRouter-Request-Id", id)
+				}
+				respBody, readErr = io.ReadAll(fbResp.Body)
+				if readErr != nil {
+					http.Error(w, "Incomplete fallback response", http.StatusBadGateway)
+					return
+				}
+				resp = fbResp
+				resolvedModel = nextModel
+				w.Header().Set("X-DOSRouter-Fallback", nextModel)
+				w.Header().Set("X-DOSRouter-Model", nextModel)
+
 			}
 		}
 
-		// Cache the response
-		s.cache.Set(body, cache.Entry{
-			Body:       respBody,
-			StatusCode: resp.StatusCode,
-			Header:     resp.Header,
-		})
-
+		spend.readUsage(respBody)
 		// Inject usage.cost into non-streaming response (upstream v0.12.146)
-		if resp.StatusCode == http.StatusOK && decision != nil {
+		if resp.StatusCode == http.StatusOK {
 			var parsed map[string]interface{}
 			if json.Unmarshal(respBody, &parsed) == nil {
 				// Overwrite model with actual resolved model
-				parsed["model"] = resolvedModel
-				// Strip tool-call planning prose from content (upstream
-				// v0.12.165/166): some providers (notably Kimi) emit planning text
-				// in message.content alongside tool_calls, or flag the turn via
-				// finish_reason=tool_calls. Tool execution only needs tool_calls;
-				// forwarding the prose pollutes chat channels. Blank the content
-				// when the turn ends in tool calls.
+				if decision != nil {
+					parsed["model"] = resolvedModel
+				}
+				// Preserve assistant prose alongside native tool calls (v0.12.248).
 				if choices, ok := parsed["choices"].([]interface{}); ok {
 					for _, c := range choices {
 						choice, ok := c.(map[string]interface{})
@@ -683,9 +801,11 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 						// If model output formatted tool calls in plain text content, recover them.
 						if msg, ok := choice["message"].(map[string]interface{}); ok {
 							tc, _ := msg["tool_calls"].([]interface{})
-							if len(tc) == 0 {
+							if len(tc) == 0 && strings.TrimSpace(string(req.Extra["tool_choice"])) != `"none"` {
 								contentStr, _ := msg["content"].(string)
-								if recovered := recoverStructuredToolCalls(contentStr, ""); len(recovered) > 0 {
+								contentStr = stripThinking(contentStr)
+								if recovered, cleaned := recoverToolCallsWithProse(contentStr, req.Tools); len(recovered) > 0 && requestHasTools(req.Tools) {
+									msg["content"] = cleaned
 									recList := make([]interface{}, len(recovered))
 									for idx, r := range recovered {
 										recList[idx] = r
@@ -696,7 +816,12 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 							}
 						}
 
-						if choiceEndsWithToolCalls(choice) {
+						if msg, ok := choice["message"].(map[string]interface{}); ok {
+							if content, ok := msg["content"].(string); ok {
+								msg["content"] = stripThinking(content)
+							}
+						}
+						if choiceEndsWithToolCalls(choice) && !forwardToolCallProse() {
 							if msg, ok := choice["message"].(map[string]interface{}); ok {
 								if s, _ := msg["content"].(string); s != "" {
 									msg["content"] = ""
@@ -706,7 +831,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 					}
 				}
 				// Inject cost breakdown if usage tokens available
-				if usage, ok := parsed["usage"].(map[string]interface{}); ok {
+				if usage, ok := parsed["usage"].(map[string]interface{}); ok && decision != nil {
 					inputTok, _ := usage["prompt_tokens"].(float64)
 					outputTok, _ := usage["completion_tokens"].(float64)
 					cb := buildCostBreakdown(resolvedModel, string(decision.Tier), decision.Profile, s.modelPricing, int(inputTok), int(outputTok))
@@ -720,11 +845,17 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 
+		if cacheAllowed && resp.StatusCode == http.StatusOK && !isEmptyTurn(respBody) {
+			s.cache.Set(cacheBody, cache.Entry{Body: respBody, StatusCode: resp.StatusCode, Header: resp.Header.Clone()})
+		}
 		// Copy headers with sanitization (upstream v0.12.208)
 		for k, v := range resp.Header {
 			for _, vv := range v {
 				w.Header().Add(k, sanitizeHeaderValue(vv))
 			}
+		}
+		if authHeader != "" {
+			w.Header().Set("Cache-Control", "no-store")
 		}
 		w.Header().Set("Content-Length", fmt.Sprintf("%d", len(respBody)))
 		w.WriteHeader(resp.StatusCode)
@@ -748,17 +879,8 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Record spend
-	if decision != nil && decision.CostEstimate > 0 {
-		_ = s.spendControl.Record(decision.CostEstimate, resolvedModel, "chat")
-		if sessionID != "" {
-			s.sessions.AddSessionCost(sessionID, int64(decision.CostEstimate*1_000_000))
-		}
-	}
+	finalStatus = "success"
 
-	// Log usage
-	_ = latencyMs
-	s.logRequest(resolvedModel, decision, startTime, "success")
 }
 
 func (s *Server) logRequest(model string, decision *router.RoutingDecision, startTime time.Time, status string) {
@@ -772,7 +894,7 @@ func (s *Server) logRequest(model string, decision *router.RoutingDecision, star
 		baselineCost = decision.BaselineCost
 		savings = decision.Savings
 	}
-	logger.LogUsage(logger.UsageEntry{
+	s.writeUsage(logger.UsageEntry{
 		Timestamp:    time.Now().UTC().Format(time.RFC3339),
 		Model:        model,
 		Tier:         tier,
@@ -782,15 +904,6 @@ func (s *Server) logRequest(model string, decision *router.RoutingDecision, star
 		LatencyMs:    time.Since(startTime).Milliseconds(),
 		Status:       status,
 	})
-}
-
-func mustSpendControl() *spendcontrol.SpendControl {
-	sc, err := spendcontrol.New(spendcontrol.NewFileStorage())
-	if err != nil {
-		// Non-fatal: start with empty state
-		sc, _ = spendcontrol.New(nil)
-	}
-	return sc
 }
 
 func flattenHeaders(h http.Header) map[string]string {
@@ -859,6 +972,7 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 	resp := map[string]interface{}{
 		"status":  "ok",
 		"version": Version,
+		"gateway": gatewayOrigin(s.config.UpstreamBase),
 	}
 	// Full health includes session/journal stats
 	if r.URL.Query().Get("full") == "true" {
@@ -867,7 +981,13 @@ func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
 		resp["sessions"] = sessStats.Count
 		resp["journalSessions"] = jStats.Sessions
 		resp["journalEntries"] = jStats.TotalEntries
-		resp["spendControl"] = s.spendControl.GetStatus()
+		if s.spendControl != nil {
+			resp["spendControl"] = s.spendControl.GetStatus()
+		}
+		if s.spendError != nil {
+			resp["status"] = "degraded"
+			resp["spendControlError"] = "spending state unavailable"
+		}
 	}
 	json.NewEncoder(w).Encode(resp)
 }
@@ -937,6 +1057,14 @@ func (s *Server) handleImageGen(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if s.spendError != nil || s.spendControl == nil {
+		http.Error(w, "Spending state unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if len(s.spendControl.GetLimits()) > 0 {
+		http.Error(w, "Image cost cannot be reserved under configured spend limits", http.StatusTooManyRequests)
+		return
+	}
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		http.Error(w, "Failed to read body", http.StatusBadRequest)
@@ -973,7 +1101,13 @@ func (s *Server) handleImageGen(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
-	respBody, _ := io.ReadAll(resp.Body)
+	respBody, readErr := io.ReadAll(resp.Body)
+	if readErr != nil {
+		if r.Context().Err() == nil {
+			http.Error(w, "Incomplete upstream response", http.StatusBadGateway)
+		}
+		return
+	}
 
 	for k, v := range resp.Header {
 		for _, vv := range v {
@@ -981,13 +1115,18 @@ func (s *Server) handleImageGen(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.Header().Set("X-DOSRouter-Model", req.Model)
+	if upstreamReq.Header.Get("Authorization") != "" {
+		w.Header().Set("Cache-Control", "no-store")
+	}
 	w.WriteHeader(resp.StatusCode)
 	w.Write(respBody)
 
-	logger.LogUsage(logger.UsageEntry{
+	s.writeUsage(logger.UsageEntry{
 		Timestamp: time.Now().UTC().Format(time.RFC3339),
 		Model:     req.Model,
 		Tier:      "IMAGE",
+		Cost:      mediaCost(resp.Header, respBody),
+		RequestID: gatewayRequestID(resp.Header),
 		Status:    fmt.Sprintf("%d", resp.StatusCode),
 	})
 }
@@ -995,7 +1134,7 @@ func (s *Server) handleImageGen(w http.ResponseWriter, r *http.Request) {
 // choiceEndsWithToolCalls reports whether a parsed choice object (streaming or
 // non-streaming) represents a tool-call turn: either finish_reason is
 // "tool_calls", or a non-empty tool_calls array is present on message or delta.
-// Used to suppress planning prose in content (upstream v0.12.165/166/169).
+// Used for the optional legacy prose suppression setting.
 func choiceEndsWithToolCalls(choice map[string]interface{}) bool {
 	if fr, _ := choice["finish_reason"].(string); fr == "tool_calls" {
 		return true

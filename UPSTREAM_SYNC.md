@@ -2,7 +2,7 @@
 
 **Upstream**: [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript)
 **This repo**: [DOS/DOSRouter](https://github.com/DOS/DOSRouter) (Go port)
-**Last synced**: v0.12.245 (2026-08-16, core ported & aligned)
+**Last synced**: v0.12.278 source snapshot (`05de1e0`, 2026-09-12; Go-applicable core ported, exclusions below)
 
 ## Sync Workflow
 
@@ -29,6 +29,65 @@ These upstream areas are excluded (TS/npm-specific):
 - Node.js/npm-specific (prettier, package.json, CI)
 
 ## Sync Log
+
+### 2026-09-12 - Sync v0.12.245 to v0.12.278 source snapshot
+
+Compared `v0.12.245...05de1e0` from BlockRunAI/ClawRouter. The newest
+published Git tag at sync time is `v0.12.277`; upstream `package.json` and
+CHANGELOG identify the main snapshot as `0.12.278`. This is a source parity
+update, not a claim that every BlockRun product feature is implemented.
+
+**Ported or adapted:**
+
+| Upstream area | Go adaptation |
+| --- | --- |
+| v0.12.248 assistant/tool prose | Preserve assistant prose with native calls and text-recovered calls; strip tagged thinking, including split SSE tags. `DOSROUTER_TOOL_CALL_PROSE=off` restores legacy suppression. Recover syntax only when tools are supplied. |
+| v0.12.252 tool-pair safety | Preserve `tool_calls`, `tool_call_id`, names and all provider extension fields during request rewriting. Avoid compressing protocol-bearing or multimodal messages. DOSRouter has no upstream-style message truncation path. |
+| v0.12.254-256 cancellation/cache | Keep Go request contexts through chat/image requests, stop fallback after disconnect, reject incomplete bodies, preserve caller-controlled timestamp content in cache keys; normalize JSON object key order without conflating arrays. |
+| v0.12.257-278 models/routing | Align chat catalog metadata and all four profile chains with router-core `5ee7c23c993013a8052588191569db5cf7fb793c`; retain DOS aliases and exact explicit pins. Retire dead free defaults, fix capability claims and prices. |
+| v0.12.263/269/274 spend safety | Atomic in-flight reservations for direct and routed chat, including fallback attempts; pending spend counts in rolling/session caps. Persist snapshots serially with atomic file replacement. Invalid state/cost fails closed. Each Server uses one controller; embedded callers may inject a shared controller explicitly. |
+| v0.12.267 ambiguous sends | Do not repeat a chat send or switch models after an ambiguous transport failure. Each reservation authorizes one HTTP send. Status retries are disabled; model fallback obtains a separate reservation and ambiguous server errors retain their estimate. DOSRouter does not yet sign x402 payments. |
+| v0.12.271-275 accounting/health | Prefer settled gateway cost headers, otherwise actual token usage, then explicitly labelled estimates. Capture gateway request IDs in usage logs; report the configured gateway origin in health. Image cost reads headers/body. Reject unknown-priced images when amount limits are configured. |
+| v0.12.272 credential transport | Refuse upstream redirects, avoid shared internal caching across caller-supplied bearer credentials (including a configured upstream key), and mark authenticated responses `no-store`. |
+| Stats day windows | Go already defaulted nonpositive windows safely; cap aggregate reporting to 30 days and test using isolated log directories. |
+| Validation adaptation | Replace stale TypeScript/npm CI and missing Docker scanner targets with Go build, vet, race tests and govulncheck. Preserve job/workflow names and automatic CodeQL; prefer patched Go 1.26.6 via the toolchain directive. Dependabot follows Go modules and Actions. |
+
+**Catalog notes:** 114 upstream chat rows plus nine compatibility records, with
+250 chat aliases. The free default is `free/nemotron-3.5-lightning`. Model
+metadata reflects upstream source, not independently probed DOS providers.
+Gemini 3.6/3.8 Flash's $0.75/$3.75 promotional rates end on 2027-01-01,
+when upstream documents $1.50/$7.50; automated repricing is not implemented.
+
+**Intentional divergence:** The upstream timestamp-stripping optimization is not enabled: a standalone server cannot distinguish injected prefixes from client-authored content. Cache/dedup keys preserve both string and first text-block timestamps until trusted injection provenance exists.
+
+**Already satisfied:** `/v1/models` lists active catalog entries; chat and image
+requests derive their context from the client; full health performs no balance
+RPC; nonpositive stats/log windows have safe defaults.
+
+**Excluded or deferred:**
+
+- OpenClaw plugin identity/migrations, desktop releases, npm dependencies,
+  Solana defaults/RPC/signing, and the added-then-removed TWZRD integration are
+  outside this standalone Go runtime.
+- BlockRun login/account-credit/status/reconcile APIs, account service proxying,
+  vendor-specific paid endpoints, image/video aliases and async polling require
+  separate product/provider contracts. The existing image endpoint remains a
+  passthrough. Missing media cost must not be interpreted as proof of a free call.
+- x402 counterparty policy and signing hooks remain deferred: `payment.submitPayment`
+  still returns `Success:false`; no signing, live charge or facilitator rollout
+  occurred. Earlier tracker wording about a full payment port overstated support.
+- Spend limits use estimates before dispatch, then gateway/token evidence when
+  available. They are not a provider-enforced USD guarantee. Unconfirmed sends
+  conservatively consume their estimate. Reservations and session counters are
+  process-local and reset at restart; file storage is not a multi-process ledger.
+  Cross-server sharing requires an explicitly shared controller.
+- Streaming textual tool-call synthesis is not implemented; native streaming
+  tool calls and prose are preserved. No live provider request was used to
+  verify catalog availability or pricing.
+
+Validation is recorded in the sync PR: Go unit/integration tests, race tests,
+build, vet, vulnerability scan and configured automated reviews. No deployment
+workflow exists in this repository, and this sync does not deploy DOS-AI.
 
 ### 2026-08-16 - Sync to v0.12.245 (flagship models, tool-call recovery, proxy hardening)
 

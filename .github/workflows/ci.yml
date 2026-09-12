@@ -7,6 +7,9 @@ on:
     branches: [main]
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
@@ -17,38 +20,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4.2.2
-
-      - uses: actions/setup-node@v4.3.0
+      - uses: actions/setup-go@v6
         with:
-          node-version: "22"
-          cache: npm
-
-      - run: npm ci
-
-      - name: Check formatting
-        run: npx prettier --check .
-
-      - name: Lint
-        run: npx eslint src/
-
-      - name: Typecheck
-        run: npm run typecheck
+          go-version-file: go.mod
+          cache: true
+      - name: Vet
+        run: go vet ./...
 
   build-and-test:
     name: Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4.2.2
-
-      - uses: actions/setup-node@v4.3.0
+      - uses: actions/setup-go@v6
         with:
-          node-version: "22"
-          cache: npm
-
-      - run: npm ci
-
+          go-version-file: go.mod
+          cache: true
       - name: Build
-        run: npm run build
-
-      - name: Integration tests (lifecycle)
-        run: npx vitest run --config vitest.integration.config.ts test/integration/lifecycle.test.ts
+        run: go build ./...
+      - name: Test with race detector
+        run: go test -race -count=1 ./...

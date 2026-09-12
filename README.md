@@ -125,9 +125,9 @@ go test ./router/ -bench=. -benchmem
 
 ## Upstream Sync
 
-This is a Go port of [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter). Routing logic is synced periodically from upstream releases. Payment, plugin lifecycle, and CLI-specific features are excluded. See [UPSTREAM_SYNC.md](UPSTREAM_SYNC.md) for details.
+This is a Go port of [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter). Applicable routing, proxy and spending-control changes are ported from upstream source snapshots. OpenClaw/desktop lifecycle and provider-specific account services are excluded; x402 signing remains unimplemented. See [UPSTREAM_SYNC.md](UPSTREAM_SYNC.md) for details.
 
-**Current sync**: v0.12.146
+**Current sync**: v0.12.278 source snapshot (`05de1e0`, 2026-09-12). See the tracker for adapted and deferred features.
 
 ## License
 

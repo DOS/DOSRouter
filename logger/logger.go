@@ -28,6 +28,8 @@ func ensureDir() {
 
 // UsageEntry represents a single usage log record.
 type UsageEntry struct {
+	RequestID    string  `json:"requestId,omitempty"`
+	CostSource   string  `json:"costSource,omitempty"`
 	Timestamp    string  `json:"timestamp"`
 	Model        string  `json:"model"`
 	Tier         string  `json:"tier"`
