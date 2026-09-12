@@ -53,3 +53,23 @@ func TestRecoveredCallsHaveUniqueIDsAndDeclaredNames(t *testing.T) {
 		t.Fatalf("prose=%q", prose)
 	}
 }
+
+func TestToolAndGatewayEdgeCases(t *testing.T) {
+	for _, raw := range []string{"null", " null ", "[]", "", `{"name":"not-an-array"}`} {
+		if requestHasTools([]byte(raw)) {
+			t.Errorf("has tools for %q", raw)
+		}
+		calls, _ := recoverToolCallsWithProse("call:read_file({})", []byte(raw))
+		if len(calls) != 0 {
+			t.Errorf("recovered undeclared calls for %q", raw)
+		}
+	}
+	for _, input := range []string{"//localhost:8080", "localhost", ""} {
+		if origin := gatewayOrigin(input); origin != "" {
+			t.Errorf("origin(%q)=%q", input, origin)
+		}
+	}
+	if got := gatewayOrigin("https://example.com/v1?not=public"); got != "https://example.com" {
+		t.Fatalf("origin=%q", got)
+	}
+}

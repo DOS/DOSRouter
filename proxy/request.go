@@ -127,7 +127,7 @@ func recoverToolCallsWithProse(content string, tools json.RawMessage) ([]map[str
 
 func gatewayOrigin(base string) string {
 	u, err := url.Parse(base)
-	if err != nil || u.Host == "" {
+	if err != nil || u.Host == "" || u.Scheme == "" {
 		return ""
 	}
 	return u.Scheme + "://" + u.Host
@@ -139,4 +139,9 @@ func (s *Server) writeUsage(entry logger.UsageEntry) {
 		return
 	}
 	logger.LogUsage(entry)
+}
+
+func requestHasTools(raw json.RawMessage) bool {
+	var tools []json.RawMessage
+	return json.Unmarshal(raw, &tools) == nil && len(tools) > 0
 }

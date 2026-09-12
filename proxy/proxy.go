@@ -320,7 +320,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			Config:         s.routingConfig,
 			ModelPricing:   s.modelPricing,
 			RoutingProfile: routingProfile,
-			HasTools:       len(req.Tools) > 0,
+			HasTools:       requestHasTools(req.Tools),
 		})
 		if err != nil {
 			http.Error(w, "Routing error: "+err.Error(), http.StatusInternalServerError)
@@ -775,7 +775,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 							if len(tc) == 0 && strings.TrimSpace(string(req.Extra["tool_choice"])) != `"none"` {
 								contentStr, _ := msg["content"].(string)
 								contentStr = stripThinking(contentStr)
-								if recovered, cleaned := recoverToolCallsWithProse(contentStr, req.Tools); len(recovered) > 0 && len(req.Tools) > 0 {
+								if recovered, cleaned := recoverToolCallsWithProse(contentStr, req.Tools); len(recovered) > 0 && requestHasTools(req.Tools) {
 									msg["content"] = cleaned
 									recList := make([]interface{}, len(recovered))
 									for idx, r := range recovered {

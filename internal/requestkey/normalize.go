@@ -64,12 +64,12 @@ func content(value any) any {
 		if !ok {
 			continue
 		}
-		copy := make(map[string]any, len(obj))
+		blockCopy := make(map[string]any, len(obj))
 		for key, value := range obj {
-			copy[key] = value
+			blockCopy[key] = value
 		}
-		copy["text"] = timestamp.ReplaceAllString(text, "")
-		out[i] = copy
+		blockCopy["text"] = timestamp.ReplaceAllString(text, "")
+		out[i] = blockCopy
 		break
 	}
 	return out
