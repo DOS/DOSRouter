@@ -73,3 +73,16 @@ func TestToolAndGatewayEdgeCases(t *testing.T) {
 		t.Fatalf("origin=%q", got)
 	}
 }
+
+type testWrappedTransport struct{ http.RoundTripper }
+
+func TestNewAcceptsWrappedDefaultTransport(t *testing.T) {
+	original := http.DefaultTransport
+	wrapper := &testWrappedTransport{original}
+	http.DefaultTransport = wrapper
+	t.Cleanup(func() { http.DefaultTransport = original })
+	srv, _ := syncTestServer(t, func(w http.ResponseWriter, r *http.Request) { syncTestOK(w) }, nil)
+	if srv.httpClient.Transport != wrapper {
+		t.Fatal("wrapped transport was not preserved")
+	}
+}

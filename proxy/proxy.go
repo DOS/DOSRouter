@@ -97,6 +97,10 @@ func New(cfg Config) *Server {
 		rc = *cfg.RoutingConfig
 	}
 
+	transport := http.DefaultTransport
+	if standard, ok := transport.(*http.Transport); ok {
+		transport = standard.Clone()
+	}
 	sc := cfg.SpendControl
 	var spendErr error
 	if sc == nil {
@@ -108,7 +112,7 @@ func New(cfg Config) *Server {
 		modelPricing:  models.BuildPricingMap(),
 		httpClient: &http.Client{
 			Timeout:       5 * time.Minute,
-			Transport:     http.DefaultTransport.(*http.Transport).Clone(),
+			Transport:     transport,
 			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 		dedup:        dedup.New(),
