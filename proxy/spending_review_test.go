@@ -122,3 +122,40 @@ func TestTruncatedEmptyTurnFallbackSettlesReservation(t *testing.T) {
 		t.Fatalf("fallback left a pending reservation: %+v", status)
 	}
 }
+
+type closedStreamWriter struct{ *httptest.ResponseRecorder }
+
+func (w *closedStreamWriter) Write([]byte) (int, error) { return 0, io.ErrClosedPipe }
+
+func TestInterruptedStreamRetainsObservedUsage(t *testing.T) {
+	for _, failure := range []string{"client write", "upstream read"} {
+		t.Run(failure, func(t *testing.T) {
+			srv, sc := syncTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/event-stream")
+				if failure == "upstream read" {
+					w.Header().Set("Content-Length", "4096")
+				}
+				io.WriteString(w, "data: {\"choices\":[],\"usage\":{\"prompt_tokens\":1000,\"completion_tokens\":500}}\n\n")
+			}, nil)
+			if err := sc.SetLimit(spendcontrol.WindowSession, 1); err != nil {
+				t.Fatal(err)
+			}
+			const model = "openai/gpt-4o-mini"
+			srv.modelPricing[model] = router.ModelPricing{InputPrice: 1, OutputPrice: 2}
+			request := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(`{"model":"`+model+`","stream":true,"messages":[{"role":"user","content":"stream"}]}`))
+			var writer http.ResponseWriter = httptest.NewRecorder()
+			if failure == "client write" {
+				writer = &closedStreamWriter{httptest.NewRecorder()}
+			}
+			srv.handleChatCompletions(writer, request)
+			history := sc.GetHistory()
+			const expectedCost = 0.002
+			if len(history) != 1 || history[0].Amount != expectedCost {
+				t.Fatalf("observed usage lost on interruption: %+v, want one charge %v", history, expectedCost)
+			}
+			if spent := sc.GetSpending()[spendcontrol.WindowSession]; spent != expectedCost {
+				t.Fatalf("pending reservation remained: %v", spent)
+			}
+		})
+	}
+}

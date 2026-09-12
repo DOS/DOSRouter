@@ -599,6 +599,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 						pt, inputOK := validTokenCount(u["prompt_tokens"])
 						ct, outputOK := validTokenCount(u["completion_tokens"])
 						if inputOK && outputOK {
+							spend.input, spend.output = pt, ct
 							spend.usageKnown = true
 							streamInputTok, streamOutputTok = pt, ct
 						}
