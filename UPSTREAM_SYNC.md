@@ -2,7 +2,7 @@
 
 **Upstream**: [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript)
 **This repo**: [DOS/DOSRouter](https://github.com/DOS/DOSRouter) (Go port)
-**Last synced**: v0.12.278 source snapshot (`05de1e0`, 2026-09-12; Go-applicable core ported, exclusions below)
+**Last synced**: v0.12.279 release (`becb2968711bb203a1498958de27a2b1be3780c3`, checked 2026-09-22; no new Go-applicable core changes since `05de1e0`, exclusions below)
 
 ## Sync Workflow
 
@@ -29,6 +29,49 @@ These upstream areas are excluded (TS/npm-specific):
 - Node.js/npm-specific (prettier, package.json, CI)
 
 ## Sync Log
+
+### 2026-09-22 - Sync to the v0.12.279 release
+
+Verified the upstream release list, fetched tags, and compared the previous
+source baseline `05de1e0` with the peeled `v0.12.279` commit
+`becb2968711bb203a1498958de27a2b1be3780c3`. This is the latest non-preview
+release observed on this date, published on 2026-09-16. The subsequently
+published `v0.12.278` tag resolves to
+`107c2d1d8b4847671ec0aad4b00902b9bcf4170c`; the previous sync had already
+covered the later `05de1e0` source snapshot, so its changes are not new work.
+
+The complete incremental diff contains 12 files. There are **no changes**
+under upstream `src/`, `packages/`, or `runtime/`. The Go router, catalog,
+proxy, caching, spend controls and payment implementation therefore require
+no new port in this release. Existing exclusions and limitations from the
+2026-09-12 sync remain in force.
+
+| Incremental upstream change | Disposition |
+| --- | --- |
+| Desktop control-plane layout, themes, wallet/funding UI, API view models | Skip: Electron/React application, absent from this standalone Go runtime. |
+| Desktop model-count deduplication and chart/card calendar-window alignment (`usage-stats.ts` and tests) | Skip: presentation calculations over Desktop data; no equivalent chart/card in DOSRouter and no upstream server stats change. |
+| Desktop managed runtime package version | Skip: npm child-runtime packaging; DOSRouter ships its own Go binary. |
+| Brand snapshot and README counts | Skip: BlockRun marketing/catalog counts are not verified DOS provider availability. No catalog rows or prices changed in the incremental source diff. |
+| Hardened `sync-brand-numbers.mjs` rendering/attribute escaping | Skip: DOSRouter does not run this upstream brand-sync script. |
+| Root package/lock version and release changelog | Record the release here; no Go module dependency change. |
+
+The v0.12.279 release notes also summarize earlier restart-free Desktop
+chain switching, Hermes reload behavior, axios/hono patches and the Solana
+single-copy signer build guard. Those changes are already present in the
+previous upstream snapshot and are outside the standalone Go scope; they
+must not be counted again as newly ported fixes.
+
+Reproducible scope checks:
+
+```sh
+git rev-parse 'v0.12.279^{}'
+git diff --name-only 05de1e0 v0.12.279
+git diff --exit-code 05de1e0 v0.12.279 -- src packages runtime
+```
+
+This is a release-parity documentation update. It does not deploy DOS-AI,
+change live routing or catalog records, or activate deferred payment features.
+Validation and automated review are retained on the sync PR.
 
 ### 2026-09-12 - Sync v0.12.245 to v0.12.278 source snapshot
 
