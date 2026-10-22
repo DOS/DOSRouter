@@ -30,6 +30,51 @@ These upstream areas are excluded (TS/npm-specific):
 
 ## Sync Log
 
+### 2026-10-22 - Post-merge local runtime acceptance
+
+- Owner: Codex, branch `codex/smoke-upstream-20261022`.
+- Revision under test: merged main `422774fe3ba3d94c3e9be2e7082945ed54222770`.
+- Outcome: verify the actual standalone CLI process over HTTP and a browser.
+- Scope: DOSRouter test harness and evidence; isolated localhost gateway and
+  synthetic state only. No provider charge, credentials or remote rollout.
+- Acceptance: binary revision/hash, startup catalog refresh, explicit model
+  and free aliases, fallback/outcomes, streaming, spend admission, local trust,
+  clean shutdown and browser readback with machine-readable evidence.
+- Environment discovery: GitHub environments list is empty; the current
+  process has no DOSROUTER_UPSTREAM, DOSROUTER_PORT or DOSROUTER_API_KEY.
+  Historical npm/Docker plans do not describe this standalone Go runtime.
+- Completed: clean-source Go 1.26.10 binary, SHA-256
+  `5bd95979b1176002133def84734e3b98cd6d70cb107d58627ffb00cede9f7a27`;
+  all 18 process scenarios passed. The real refresh intervals were 300011
+  and 300012 ms; invalid startup recovered and invalid updates retained the
+  last good catalog. MCP Playwright verified same-origin health, model list
+  and chat, plus cross-site HTTP 403. All three CLI processes exited and
+  their ports closed. Report rendering passed desktop and 390px checks.
+- Driver correction: Node fetch ignored a forged Host override. The original
+  failed observation remains recorded; literal raw HTTP against the same
+  binary returned four HTTP 403 responses with zero gateway sends. The fixed
+  harness then passed a separate full 18-scenario run without corrections.
+- Independent review found two harness gaps: late SIGINT registration and a
+  vacuously true reasoning assertion. Both were fixed. A focused final-source
+  probe passed 16 immediate scenarios, preserved the exact assistant message
+  and model, and confirmed owned-process shutdown on Ctrl+C during the timer
+  wait. It makes no claim for the interrupted refresh scenario.
+- CodeRabbit's subsequent review added browser-proof correlation and cleanup
+  on a failed concurrency assertion. The finish endpoint now rejects missing
+  gateway-chat evidence or mismatched browser fields; the renderer checks the
+  correlation too. An injected unexpected concurrency response still releases
+  and settles the held request. A final-source process probe passed all 16
+  immediate scenarios and interrupt shutdown. External MCP browser observations
+  remain operator attestations, with gateway chat independently correlated.
+- Evidence: [Vietnamese report](docs/validation/2026-10-22/upstream-smoke.html),
+  [initial run and correction](docs/validation/2026-10-22/upstream-smoke.json),
+  [full rerun and final-source probes](docs/validation/2026-10-22/harness-recheck.json)
+  [failure-path and final delta probes](docs/validation/2026-10-22/harness-failure-probes.json)
+  and [report browser readback](docs/validation/2026-10-22/report-browser.json).
+- Remaining boundary: remote staging, paid-provider behavior and deployment
+  remain unverified because no target environment is configured or authorized.
+  No product source change was needed for the process acceptance.
+
 ### 2026-10-22 - Sync through 0.12.297 source
 
 Owner: Codex, branch `codex/sync-clawrouter-20261022`. Compared the previous

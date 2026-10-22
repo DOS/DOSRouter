@@ -1,0 +1,22 @@
+{
+  "driver": "MCP Playwright",
+  "desktop": {
+    "language": "vi",
+    "passCount": "18/18",
+    "rows": 18,
+    "failures": 0,
+    "background": "rgb(16, 16, 20)",
+    "red": "rgb(255, 76, 87)",
+    "jsonStatus": 200,
+    "jsonChecks": 18,
+    "jsonAllPass": true,
+    "overflow": false
+  },
+  "mobile": {
+    "width": 390,
+    "scrollWidth": 375,
+    "overflow": false
+  },
+  "note": "Report and linked JSON inspected through temporary localhost HTTP. Link checked using browser fetch after native click timed out.",
+  "recordedAt": "2026-10-22T14:45:15.397Z"
+}

@@ -1,0 +1,34 @@
+{
+  "checkedAt": "2026-10-22T14:32:04.813Z",
+  "revision": "422774fe3ba3d94c3e9be2e7082945ed54222770",
+  "binarySha256": "5bd95979b1176002133def84734e3b98cd6d70cb107d58627ffb00cede9f7a27",
+  "transport": "node:http sends the literal Host header",
+  "originalDriverIssue": "Node fetch ignored the overridden Host header and sent the loopback host; its 429 was a driver error, not a guard failure.",
+  "results": [
+    {
+      "headers": {
+        "Origin": "https://attacker.invalid"
+      },
+      "status": 403
+    },
+    {
+      "headers": {
+        "Origin": "null"
+      },
+      "status": 403
+    },
+    {
+      "headers": {
+        "Host": "attacker.invalid"
+      },
+      "status": 403
+    },
+    {
+      "headers": {
+        "Sec-Fetch-Site": "cross-site"
+      },
+      "status": 403
+    }
+  ],
+  "upstreamSends": 0
+}
