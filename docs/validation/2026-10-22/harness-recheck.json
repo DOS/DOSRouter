@@ -1,0 +1,783 @@
+{
+  "recordedAt": "2026-10-22T14:49:09.666Z",
+  "revision": "422774fe3ba3d94c3e9be2e7082945ed54222770",
+  "binarySha256": "5bd95979b1176002133def84734e3b98cd6d70cb107d58627ffb00cede9f7a27",
+  "fullSuite": {
+    "harnessCommit": "6eb201b05c29c37d9f50155e06f6285442ff1d7a",
+    "harnessSourceSha256": "c5a18ef8df443f753578bc556451c2991e122ba7d6f4b36300e0988922c4af29",
+    "startedAt": "2026-10-22T14:42:39.802Z",
+    "finishedAt": "2026-10-22T14:47:40.090Z",
+    "checks": [
+      {
+        "id": "health",
+        "label": "Health và revision của tiến trình CLI",
+        "pass": true,
+        "durationMs": 3,
+        "details": {
+          "gateway": "http://127.0.0.1:59966",
+          "journalEntries": 0,
+          "journalSessions": 0,
+          "sessions": 0,
+          "spendControl": {
+            "perRequest": {
+              "limit": 0.05,
+              "spent": 0,
+              "remaining": 0.05
+            },
+            "session": {
+              "limit": 10,
+              "spent": 0,
+              "remaining": 10
+            }
+          },
+          "status": "ok",
+          "version": "422774f"
+        }
+      },
+      {
+        "id": "startup-catalog",
+        "label": "Catalog mới tự nạp khi khởi động",
+        "pass": true,
+        "durationMs": 6,
+        "details": {
+          "reads": 1,
+          "modelVisible": true
+        }
+      },
+      {
+        "id": "invalid-startup",
+        "label": "Catalog lỗi giữ bản đóng gói",
+        "pass": true,
+        "durationMs": 16,
+        "details": {
+          "bundledFallback": true
+        }
+      },
+      {
+        "id": "reasoning",
+        "label": "Model reasoning mới chuyển tiếp đúng metadata",
+        "pass": true,
+        "durationMs": 8,
+        "details": {
+          "status": 200,
+          "trace": [
+            {
+              "gateway": "stable",
+              "tag": "reasoning",
+              "model": "fixture/reasoner",
+              "sequence": 1,
+              "status": 200,
+              "reasoningNormalized": true
+            }
+          ]
+        }
+      },
+      {
+        "id": "free-alias",
+        "label": "Alias miễn phí không thành model trả phí",
+        "pass": true,
+        "durationMs": 8,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "free-alias",
+            "model": "free/nemotron-3.5-lightning",
+            "sequence": 1,
+            "status": 200,
+            "reasoningNormalized": true
+          }
+        ]
+      },
+      {
+        "id": "outcome-memory",
+        "label": "Model lỗi lặp lại được chuyển xuống cuối",
+        "pass": true,
+        "durationMs": 60,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-0",
+            "model": "google/gemini-2.5-flash",
+            "sequence": 1,
+            "status": 502,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-0",
+            "model": "google/gemini-3-flash-preview",
+            "sequence": 2,
+            "status": 200,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-1",
+            "model": "google/gemini-2.5-flash",
+            "sequence": 1,
+            "status": 502,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-1",
+            "model": "google/gemini-3-flash-preview",
+            "sequence": 2,
+            "status": 200,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-2",
+            "model": "google/gemini-2.5-flash",
+            "sequence": 1,
+            "status": 502,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-2",
+            "model": "google/gemini-3-flash-preview",
+            "sequence": 2,
+            "status": 200,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-3",
+            "model": "google/gemini-3-flash-preview",
+            "sequence": 1,
+            "status": 200,
+            "reasoningNormalized": true
+          }
+        ]
+      },
+      {
+        "id": "empty-chain",
+        "label": "Phản hồi rỗng tiếp tục tới model có kết quả",
+        "pass": true,
+        "durationMs": 20,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "empty-chain",
+            "model": "google/gemini-3.5-flash",
+            "sequence": 1,
+            "status": 200,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "empty-chain",
+            "model": "google/gemini-3.6-flash",
+            "sequence": 2,
+            "status": 200,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "empty-chain",
+            "model": "anthropic/claude-haiku-4.5",
+            "sequence": 3,
+            "status": 200,
+            "reasoningNormalized": true
+          }
+        ]
+      },
+      {
+        "id": "attempt-cap",
+        "label": "Chuỗi lỗi dừng sau tối đa 5 model",
+        "pass": true,
+        "durationMs": 20,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "all-fail",
+            "model": "google/gemini-3.5-flash",
+            "sequence": 1,
+            "status": 502,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "all-fail",
+            "model": "google/gemini-3.6-flash",
+            "sequence": 2,
+            "status": 502,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "all-fail",
+            "model": "anthropic/claude-haiku-4.5",
+            "sequence": 3,
+            "status": 502,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "all-fail",
+            "model": "zai/glm-5.3",
+            "sequence": 4,
+            "status": 502,
+            "reasoningNormalized": true
+          },
+          {
+            "gateway": "stable",
+            "tag": "all-fail",
+            "model": "google/gemini-3.5-flash-lite",
+            "sequence": 5,
+            "status": 502,
+            "reasoningNormalized": true
+          }
+        ]
+      },
+      {
+        "id": "explicit-pin",
+        "label": "Model chỉ định không bị thay bằng fallback",
+        "pass": true,
+        "durationMs": 17,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "explicit-pin-fails",
+            "model": "openai/gpt-4o-mini",
+            "sequence": 1,
+            "status": 502,
+            "reasoningNormalized": true
+          }
+        ]
+      },
+      {
+        "id": "lost-send",
+        "label": "Mất phản hồi không làm gửi lại request",
+        "pass": true,
+        "durationMs": 15,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "lost-response",
+            "model": "google/gemini-3-flash-preview",
+            "sequence": 1,
+            "status": "socket-closed",
+            "reasoningNormalized": true
+          }
+        ]
+      },
+      {
+        "id": "stream",
+        "label": "SSE giữ nội dung và dấu kết thúc",
+        "pass": true,
+        "durationMs": 15,
+        "details": {
+          "status": 200,
+          "done": true
+        }
+      },
+      {
+        "id": "expensive-admission",
+        "label": "Giá cao bị chặn trước khi gửi",
+        "pass": true,
+        "durationMs": 10,
+        "details": {
+          "status": 429,
+          "upstreamSends": 0
+        }
+      },
+      {
+        "id": "zero-flat",
+        "label": "Giá cố định bằng 0 không vượt spend limit",
+        "pass": true,
+        "durationMs": 14,
+        "details": {
+          "status": 429,
+          "upstreamSends": 0
+        }
+      },
+      {
+        "id": "local-trust",
+        "label": "Host và Origin không tin cậy bị từ chối",
+        "pass": true,
+        "durationMs": 5,
+        "details": {
+          "statuses": [
+            403,
+            403,
+            403,
+            403
+          ],
+          "upstreamSends": 0
+        }
+      },
+      {
+        "id": "cjk",
+        "label": "Prompt CJK dài được nâng tier theo số token",
+        "pass": true,
+        "durationMs": 28,
+        "details": {
+          "tier": "COMPLEX",
+          "reason": "Input exceeds 100000 tokens"
+        }
+      },
+      {
+        "id": "concurrency",
+        "label": "Reservation đồng thời và settlement trả lại ngân sách",
+        "pass": true,
+        "durationMs": 43,
+        "details": {
+          "first": 200,
+          "whileInFlight": 429,
+          "afterSettlement": 200
+        }
+      },
+      {
+        "id": "scheduled-refresh",
+        "label": "Refresh 5 phút và phục hồi catalog",
+        "pass": true,
+        "durationMs": 299512,
+        "details": {
+          "intervals": [
+            {
+              "gateway": "stable",
+              "intervalMs": 300023
+            },
+            {
+              "gateway": "recovery",
+              "intervalMs": 300023
+            }
+          ],
+          "lastGoodRetained": true,
+          "recoveredFromInvalidStartup": true
+        }
+      },
+      {
+        "id": "isolated-state",
+        "label": "Accounting chỉ ghi vào thư mục thử nghiệm",
+        "pass": true,
+        "durationMs": 1,
+        "details": {
+          "isolatedProfiles": 3,
+          "historyCounts": [
+            20,
+            0,
+            2
+          ],
+          "syntheticOnly": true
+        }
+      }
+    ],
+    "catalogReads": [
+      {
+        "gateway": "stable",
+        "count": 1,
+        "at": "2026-10-22T14:42:39.877Z",
+        "mode": "valid"
+      },
+      {
+        "gateway": "recovery",
+        "count": 1,
+        "at": "2026-10-22T14:42:40.026Z",
+        "mode": "invalid"
+      },
+      {
+        "gateway": "concurrency",
+        "count": 1,
+        "at": "2026-10-22T14:42:40.153Z",
+        "mode": "valid"
+      },
+      {
+        "gateway": "stable",
+        "count": 2,
+        "at": "2026-10-22T14:47:39.900Z",
+        "mode": "invalid"
+      },
+      {
+        "gateway": "recovery",
+        "count": 2,
+        "at": "2026-10-22T14:47:40.049Z",
+        "mode": "valid"
+      }
+    ],
+    "shutdown": {
+      "allOwnedProcessesExited": true,
+      "portsClosed": true
+    }
+  },
+  "focusedDelta": {
+    "harnessSourceSha256": "bc234550786661cb32a1f03b2fb443822761de9a68f6d4bbd833a3e5500c71ba",
+    "startedAt": "2026-10-22T14:47:44.995Z",
+    "checks": [
+      {
+        "id": "health",
+        "label": "Health và revision của tiến trình CLI",
+        "pass": true,
+        "durationMs": 2,
+        "details": {
+          "gateway": "http://127.0.0.1:64752",
+          "journalEntries": 0,
+          "journalSessions": 0,
+          "sessions": 0,
+          "spendControl": {
+            "perRequest": {
+              "limit": 0.05,
+              "spent": 0,
+              "remaining": 0.05
+            },
+            "session": {
+              "limit": 10,
+              "spent": 0,
+              "remaining": 10
+            }
+          },
+          "status": "ok",
+          "version": "422774f"
+        }
+      },
+      {
+        "id": "startup-catalog",
+        "label": "Catalog mới tự nạp khi khởi động",
+        "pass": true,
+        "durationMs": 6,
+        "details": {
+          "reads": 1,
+          "modelVisible": true
+        }
+      },
+      {
+        "id": "invalid-startup",
+        "label": "Catalog lỗi giữ bản đóng gói",
+        "pass": true,
+        "durationMs": 17,
+        "details": {
+          "bundledFallback": true
+        }
+      },
+      {
+        "id": "reasoning",
+        "label": "Model reasoning mới chuyển tiếp đúng metadata",
+        "pass": true,
+        "durationMs": 18,
+        "details": {
+          "status": 200,
+          "trace": [
+            {
+              "gateway": "stable",
+              "tag": "reasoning",
+              "model": "fixture/reasoner",
+              "sequence": 1,
+              "status": 200,
+              "assistantCount": 1,
+              "assistantContents": [
+                "hello"
+              ],
+              "reasoningNormalized": true
+            }
+          ]
+        }
+      },
+      {
+        "id": "free-alias",
+        "label": "Alias miễn phí không thành model trả phí",
+        "pass": true,
+        "durationMs": 8,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "free-alias",
+            "model": "free/nemotron-3.5-lightning",
+            "sequence": 1,
+            "status": 200,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          }
+        ]
+      },
+      {
+        "id": "outcome-memory",
+        "label": "Model lỗi lặp lại được chuyển xuống cuối",
+        "pass": true,
+        "durationMs": 60,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-0",
+            "model": "google/gemini-2.5-flash",
+            "sequence": 1,
+            "status": 502,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-0",
+            "model": "google/gemini-3-flash-preview",
+            "sequence": 2,
+            "status": 200,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-1",
+            "model": "google/gemini-2.5-flash",
+            "sequence": 1,
+            "status": 502,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-1",
+            "model": "google/gemini-3-flash-preview",
+            "sequence": 2,
+            "status": 200,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-2",
+            "model": "google/gemini-2.5-flash",
+            "sequence": 1,
+            "status": 502,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-2",
+            "model": "google/gemini-3-flash-preview",
+            "sequence": 2,
+            "status": 200,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "repeat-failure-3",
+            "model": "google/gemini-3-flash-preview",
+            "sequence": 1,
+            "status": 200,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          }
+        ]
+      },
+      {
+        "id": "empty-chain",
+        "label": "Phản hồi rỗng tiếp tục tới model có kết quả",
+        "pass": true,
+        "durationMs": 11,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "empty-chain",
+            "model": "google/gemini-3.5-flash",
+            "sequence": 1,
+            "status": 200,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "empty-chain",
+            "model": "google/gemini-3.6-flash",
+            "sequence": 2,
+            "status": 200,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "empty-chain",
+            "model": "anthropic/claude-haiku-4.5",
+            "sequence": 3,
+            "status": 200,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          }
+        ]
+      },
+      {
+        "id": "attempt-cap",
+        "label": "Chuỗi lỗi dừng sau tối đa 5 model",
+        "pass": true,
+        "durationMs": 29,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "all-fail",
+            "model": "google/gemini-3.5-flash",
+            "sequence": 1,
+            "status": 502,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "all-fail",
+            "model": "google/gemini-3.6-flash",
+            "sequence": 2,
+            "status": 502,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "all-fail",
+            "model": "anthropic/claude-haiku-4.5",
+            "sequence": 3,
+            "status": 502,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "all-fail",
+            "model": "zai/glm-5.3",
+            "sequence": 4,
+            "status": 502,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          },
+          {
+            "gateway": "stable",
+            "tag": "all-fail",
+            "model": "google/gemini-3.5-flash-lite",
+            "sequence": 5,
+            "status": 502,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          }
+        ]
+      },
+      {
+        "id": "explicit-pin",
+        "label": "Model chỉ định không bị thay bằng fallback",
+        "pass": true,
+        "durationMs": 16,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "explicit-pin-fails",
+            "model": "openai/gpt-4o-mini",
+            "sequence": 1,
+            "status": 502,
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          }
+        ]
+      },
+      {
+        "id": "lost-send",
+        "label": "Mất phản hồi không làm gửi lại request",
+        "pass": true,
+        "durationMs": 15,
+        "details": [
+          {
+            "gateway": "stable",
+            "tag": "lost-response",
+            "model": "google/gemini-3-flash-preview",
+            "sequence": 1,
+            "status": "socket-closed",
+            "assistantCount": 0,
+            "assistantContents": [],
+            "reasoningNormalized": false
+          }
+        ]
+      },
+      {
+        "id": "stream",
+        "label": "SSE giữ nội dung và dấu kết thúc",
+        "pass": true,
+        "durationMs": 14,
+        "details": {
+          "status": 200,
+          "done": true
+        }
+      },
+      {
+        "id": "expensive-admission",
+        "label": "Giá cao bị chặn trước khi gửi",
+        "pass": true,
+        "durationMs": 9,
+        "details": {
+          "status": 429,
+          "upstreamSends": 0
+        }
+      },
+      {
+        "id": "zero-flat",
+        "label": "Giá cố định bằng 0 không vượt spend limit",
+        "pass": true,
+        "durationMs": 14,
+        "details": {
+          "status": 429,
+          "upstreamSends": 0
+        }
+      },
+      {
+        "id": "local-trust",
+        "label": "Host và Origin không tin cậy bị từ chối",
+        "pass": true,
+        "durationMs": 5,
+        "details": {
+          "statuses": [
+            403,
+            403,
+            403,
+            403
+          ],
+          "upstreamSends": 0
+        }
+      },
+      {
+        "id": "cjk",
+        "label": "Prompt CJK dài được nâng tier theo số token",
+        "pass": true,
+        "durationMs": 21,
+        "details": {
+          "tier": "COMPLEX",
+          "reason": "Input exceeds 100000 tokens"
+        }
+      },
+      {
+        "id": "concurrency",
+        "label": "Reservation đồng thời và settlement trả lại ngân sách",
+        "pass": true,
+        "durationMs": 48,
+        "details": {
+          "first": 200,
+          "whileInFlight": 429,
+          "afterSettlement": 200
+        }
+      }
+    ],
+    "shutdown": {
+      "allOwnedProcessesExited": true,
+      "portsClosed": true
+    },
+    "interruption": {
+      "method": "Ctrl+C sent to owned PTY while waiting for the first scheduled refresh",
+      "terminalExitCode": 1,
+      "note": "PowerShell PTY reported exit 1 after interruption; successful cleanup is established separately by saved process and port evidence. No scheduled-refresh result is claimed for this interrupted probe."
+    }
+  }
+}

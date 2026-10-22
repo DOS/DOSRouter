@@ -3,7 +3,6 @@ import { renderReport } from './smoke-report.mjs';
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
 import { execFileSync, spawn } from 'node:child_process';
-import { once } from 'node:events';
 import fs from 'node:fs/promises';
 import http from 'node:http';
 import net from 'node:net';
@@ -30,7 +29,7 @@ const evidence = { schema: 1, startedAt: new Date().toISOString(), revision,
 const modes = { stable: 'valid', recovery: 'invalid', concurrency: 'valid' };
 const reads = { stable: 0, recovery: 0, concurrency: 0 };
 const caseCounts = new Map(), tickWaiters = new Map(), children = [];
-let releaseHold, markHold, server;
+let releaseHold, markHold, server, cleanupPromise;
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 const exited = child => child.exitCode !== null || child.signalCode !== null;
 
@@ -56,17 +55,23 @@ function complete(w,model,tag,stream=false) {
   } else { w.setHeader('Content-Type','application/json');w.end(JSON.stringify({model,choices:[{index:0,message:{role:'assistant',content:'fixture-ok'},finish_reason:'stop'}],usage:{prompt_tokens:10,completion_tokens:5}})); }
 }
 async function stopChildren() {
-  for(const child of children) if(!exited(child)){child.kill();await once(child,'exit');}
-  const closed=await Promise.all(children.map(async c=>{try{await fetch(`http://127.0.0.1:${c.port}/health`,{signal:AbortSignal.timeout(500)});return false;}catch{return true;}}));
-  evidence.shutdown={allOwnedProcessesExited:children.every(exited),portsClosed:closed.every(Boolean)};await save();
+  if(cleanupPromise)return cleanupPromise;
+  cleanupPromise=(async()=>{
+    const waitForExit=child=>new Promise(resolve=>{if(exited(child)){resolve();return;}const done=()=>{clearTimeout(timer);child.off('exit',done);resolve();};const timer=setTimeout(done,5000);child.once('exit',done);});
+    await Promise.all(children.map(async child=>{if(!exited(child)){child.kill();await waitForExit(child);}if(!exited(child)){child.kill('SIGKILL');await waitForExit(child);}}));
+    const closed=await Promise.all(children.map(async c=>{try{await fetch(`http://127.0.0.1:${c.port}/health`,{signal:AbortSignal.timeout(500)});return false;}catch{return true;}}));
+    evidence.shutdown={allOwnedProcessesExited:children.every(exited),portsClosed:closed.every(Boolean)};await save();
+  })();
+  return cleanupPromise;
 }
-process.on('uncaughtException',async error=>{console.error(error.message);await stopChildren();server?.close();process.exit(1);});
+process.on('uncaughtException',async error=>{console.error(error.message);try{await stopChildren();}finally{server?.close();process.exit(1);}});
+process.on('SIGINT',async()=>{try{await stopChildren();}finally{server?.close();process.exit(130);}});
 server=http.createServer(async(r,w)=>{
   try {
     const url=new URL(r.url,'http://127.0.0.1');
     if(url.pathname==='/'||url.pathname==='/report'){w.setHeader('Content-Type','text/html; charset=utf-8');w.end(report());return;}
     if(url.pathname==='/evidence.json'||url.pathname==='/upstream-smoke.json'){w.setHeader('Content-Type','application/json');w.end(JSON.stringify(evidence));return;}
-    if(url.pathname==='/__finish'&&r.method==='POST'){let body='';for await(const chunk of r)body+=chunk;evidence.browser=JSON.parse(body);await stopChildren();evidence.finishedAt=new Date().toISOString();await save();w.end('ok');return;}
+    if(url.pathname==='/__finish'&&r.method==='POST'){if(!evidence.apiFinishedAt){w.writeHead(409);w.end('API checks still running');return;}let body='';for await(const chunk of r)body+=chunk;evidence.browser=JSON.parse(body);await stopChildren();evidence.finishedAt=new Date().toISOString();await save();w.end('ok');return;}
     if(url.pathname==='/__stop'&&r.method==='POST'){await stopChildren();w.end('ok');server.close();return;}
     const gateway=url.pathname.split('/')[1];
     if(!Object.hasOwn(modes,gateway)){w.writeHead(404);w.end();return;}
@@ -78,7 +83,8 @@ server=http.createServer(async(r,w)=>{
     if(!url.pathname.endsWith('/v1/chat/completions')){w.writeHead(404);w.end();return;}
     let body='';for await(const chunk of r)body+=chunk;const req=JSON.parse(body),tag=req.metadata?.smoke_case??'browser';
     const count=(caseCounts.get(tag)??0)+1;caseCounts.set(tag,count);
-    const record={gateway,tag,model:req.model,sequence:count,status:200,reasoningNormalized:req.messages?.filter(m=>m.role==='assistant').every(m=>typeof m.reasoning_content==='string')??true};evidence.trace.push(record);
+    const assistants=Array.isArray(req.messages)?req.messages.filter(m=>m.role==='assistant'):[];
+    const record={gateway,tag,model:req.model,sequence:count,status:200,assistantCount:assistants.length,assistantContents:assistants.map(m=>m.content),reasoningNormalized:assistants.length>0&&assistants.every(m=>typeof m.reasoning_content==='string')};evidence.trace.push(record);
     if(tag.startsWith('repeat-failure-')&&req.model==='google/gemini-2.5-flash'||tag==='all-fail'||tag==='explicit-pin-fails'){record.status=502;w.writeHead(502,{'X-DOS-Cost-USD':'0'});w.end('{"error":{"message":"synthetic model failure"}}');return;}
     if(tag==='empty-chain'&&count<=2){w.setHeader('X-DOS-Cost-USD','0');w.end('{"choices":[{"message":{"content":"","tool_calls":[]},"finish_reason":"stop"}]}');return;}
     if(tag==='lost-response'){record.status='socket-closed';r.socket.destroy();return;}
@@ -113,7 +119,7 @@ console.log(JSON.stringify({ready:true,fixture,proxy:stable.base,report:fixture+
 await check('health','Health và revision của tiến trình CLI',async()=>{const res=await jsonRequest(stable.base,'/health?full=true');assert.equal(res.body.status,'ok');assert.equal(res.body.version,revision.slice(0,7));return res.body;});
 await check('startup-catalog','Catalog mới tự nạp khi khởi động',async()=>{assert(await visible(stable.base,'fixture/reasoner'));assert.equal(reads.stable,1);return{reads:reads.stable,modelVisible:true};});
 await check('invalid-startup','Catalog lỗi giữ bản đóng gói',async()=>{assert(!(await visible(recovery.base,'fixture/reasoner')));assert(await visible(recovery.base,'openai/gpt-6.1-sol'));return{bundledFallback:true};});
-await check('reasoning','Model reasoning mới chuyển tiếp đúng metadata',async()=>{const res=await chat(stable.base,'reasoning','fixture/reasoner',{messages:[{role:'user',content:'hi'},{role:'assistant',content:'hello'},{role:'user',content:'continue'}]});assert.equal(res.status,200);assert(traceFor('reasoning')[0].reasoningNormalized);return{status:res.status,trace:traceFor('reasoning')};});
+await check('reasoning','Model reasoning mới chuyển tiếp đúng metadata',async()=>{const res=await chat(stable.base,'reasoning','fixture/reasoner',{messages:[{role:'user',content:'hi'},{role:'assistant',content:'hello'},{role:'user',content:'continue'}]});assert.equal(res.status,200);const record=traceFor('reasoning')[0];assert.equal(record.model,'fixture/reasoner');assert.equal(record.assistantCount,1);assert.deepEqual(record.assistantContents,['hello']);assert(record.reasoningNormalized);return{status:res.status,trace:traceFor('reasoning')};});
 await check('free-alias','Alias miễn phí không thành model trả phí',async()=>{const res=await chat(stable.base,'free-alias','v4-flash');assert.equal(res.status,200);assert.equal(traceFor('free-alias')[0].model,'free/nemotron-3.5-lightning');return traceFor('free-alias');});
 await check('outcome-memory','Model lỗi lặp lại được chuyển xuống cuối',async()=>{for(let i=0;i<4;i++)assert.equal((await chat(stable.base,`repeat-failure-${i}`)).status,200);for(let i=0;i<3;i++)assert.equal(traceFor(`repeat-failure-${i}`)[0].model,'google/gemini-2.5-flash');assert.notEqual(traceFor('repeat-failure-3')[0].model,'google/gemini-2.5-flash');return evidence.trace.filter(t=>t.tag.startsWith('repeat-failure-'));});
 await check('empty-chain','Phản hồi rỗng tiếp tục tới model có kết quả',async()=>{const res=await chat(stable.base,'empty-chain','premium');assert.equal(res.status,200);assert.equal(traceFor('empty-chain').length,3);assert.equal(res.body.choices[0].message.content,'fixture-ok');return traceFor('empty-chain');});
@@ -135,4 +141,3 @@ await check('isolated-state','Accounting chỉ ghi vào thư mục thử nghiệ
 evidence.apiFinishedAt=new Date().toISOString();await save();
 console.log(JSON.stringify({apiFinished:true,passed:evidence.checks.filter(c=>c.pass).length,total:evidence.checks.length,fixture,proxy:stable.base,report:fixture+'/report'}));
 if(!args.includes('--serve')){await stopChildren();evidence.finishedAt=new Date().toISOString();await save();server.close();process.exitCode=evidence.checks.every(c=>c.pass)&&evidence.shutdown.allOwnedProcessesExited&&evidence.shutdown.portsClosed?0:1;}
-process.on('SIGINT',async()=>{await stopChildren();server.close();});

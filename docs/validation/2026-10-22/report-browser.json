@@ -1,6 +1,5 @@
 {
   "driver": "MCP Playwright",
-  "checkedAt": "2026-10-22T14:41:27Z",
   "desktop": {
     "language": "vi",
     "passCount": "18/18",
@@ -18,5 +17,6 @@
     "scrollWidth": 375,
     "overflow": false
   },
-  "note": "Report and linked JSON inspected through temporary localhost HTTP. Link checked using browser fetch after native click timed out."
+  "note": "Report and linked JSON inspected through temporary localhost HTTP. Link checked using browser fetch after native click timed out.",
+  "recordedAt": "2026-10-22T14:45:15.397Z"
 }
