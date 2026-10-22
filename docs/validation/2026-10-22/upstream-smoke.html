@@ -1,0 +1,286 @@
+<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>DOSRouter - Xác minh runtime</title><style>
+  :root{color-scheme:dark;font-family:Segoe UI,system-ui,sans-serif;background:#101014;color:#eee}body{max-width:1080px;margin:auto;padding:36px 22px}h1{font-size:32px;margin:8px 0 16px}.brand{color:#ff4c57;font-weight:800;letter-spacing:3px}.card{background:#1b1b22;border:1px solid #34343e;border-radius:14px;padding:22px;margin:18px 0}.metrics{display:flex;gap:18px;flex-wrap:wrap}.metric{flex:1;min-width:150px;border-top:3px solid #ed3543}strong.big{font-size:30px;display:block}.muted{color:#b3b3c2;line-height:1.6}.ok{color:#7fe3ad}.bad{color:#ff7a85}code{overflow-wrap:anywhere;color:#ddd}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;padding:12px 8px;border-bottom:1px solid #34343e}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#ff8b94}summary{cursor:pointer}footer{color:#b3b3c2;padding:18px 0}</style>
+  <div class="brand">DOS / ROUTER</div><h1>Xác minh bản chạy sau đồng bộ upstream</h1><p class="muted">Binary CLI thật, giao tiếp HTTP với gateway mô phỏng. Đây là kết quả cục bộ, chưa xác nhận provider live hoặc triển khai từ xa.</p>
+  <div class="metrics"><div class="card metric"><strong class="big">18/18</strong>Kiểm tra đạt</div><div class="card metric"><strong class="big">Đạt</strong>Playwright</div><div class="card metric"><strong class="big">Đã dừng</strong>Tiến trình thử nghiệm</div></div>
+  <section class="card"><h2>Bản được xác minh</h2><p>Commit: <code>422774fe3ba3d94c3e9be2e7082945ed54222770</code></p><p>SHA-256 binary: <code>5bd95979b1176002133def84734e3b98cd6d70cb107d58627ffb00cede9f7a27</code></p><p class="muted">VCS revision khớp commit và vcs.modified=false. Mỗi tiến trình dùng thư mục người dùng riêng, không dùng API key thật.</p></section>
+  <section class="card"><h2>Kết quả kiểm tra</h2><table><thead><tr><th>Kịch bản</th><th>Kết quả</th><th>Bằng chứng</th></tr></thead><tbody><tr><td>Health và revision của tiến trình CLI</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;gateway&quot;: &quot;http://127.0.0.1:57085&quot;,
+  &quot;journalEntries&quot;: 0,
+  &quot;journalSessions&quot;: 0,
+  &quot;sessions&quot;: 0,
+  &quot;spendControl&quot;: {
+    &quot;perRequest&quot;: {
+      &quot;limit&quot;: 0.05,
+      &quot;spent&quot;: 0,
+      &quot;remaining&quot;: 0.05
+    },
+    &quot;session&quot;: {
+      &quot;limit&quot;: 10,
+      &quot;spent&quot;: 0,
+      &quot;remaining&quot;: 10
+    }
+  },
+  &quot;status&quot;: &quot;ok&quot;,
+  &quot;version&quot;: &quot;422774f&quot;
+}</pre></details></td></tr><tr><td>Catalog mới tự nạp khi khởi động</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;reads&quot;: 1,
+  &quot;modelVisible&quot;: true
+}</pre></details></td></tr><tr><td>Catalog lỗi giữ bản đóng gói</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;bundledFallback&quot;: true
+}</pre></details></td></tr><tr><td>Model reasoning mới chuyển tiếp đúng metadata</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;status&quot;: 200,
+  &quot;trace&quot;: [
+    {
+      &quot;gateway&quot;: &quot;stable&quot;,
+      &quot;tag&quot;: &quot;reasoning&quot;,
+      &quot;model&quot;: &quot;fixture/reasoner&quot;,
+      &quot;sequence&quot;: 1,
+      &quot;status&quot;: 200,
+      &quot;reasoningNormalized&quot;: true
+    }
+  ]
+}</pre></details></td></tr><tr><td>Alias miễn phí không thành model trả phí</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>[
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;free-alias&quot;,
+    &quot;model&quot;: &quot;free/nemotron-3.5-lightning&quot;,
+    &quot;sequence&quot;: 1,
+    &quot;status&quot;: 200,
+    &quot;reasoningNormalized&quot;: true
+  }
+]</pre></details></td></tr><tr><td>Model lỗi lặp lại được chuyển xuống cuối</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>[
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;repeat-failure-0&quot;,
+    &quot;model&quot;: &quot;google/gemini-2.5-flash&quot;,
+    &quot;sequence&quot;: 1,
+    &quot;status&quot;: 502,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;repeat-failure-0&quot;,
+    &quot;model&quot;: &quot;google/gemini-3-flash-preview&quot;,
+    &quot;sequence&quot;: 2,
+    &quot;status&quot;: 200,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;repeat-failure-1&quot;,
+    &quot;model&quot;: &quot;google/gemini-2.5-flash&quot;,
+    &quot;sequence&quot;: 1,
+    &quot;status&quot;: 502,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;repeat-failure-1&quot;,
+    &quot;model&quot;: &quot;google/gemini-3-flash-preview&quot;,
+    &quot;sequence&quot;: 2,
+    &quot;status&quot;: 200,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;repeat-failure-2&quot;,
+    &quot;model&quot;: &quot;google/gemini-2.5-flash&quot;,
+    &quot;sequence&quot;: 1,
+    &quot;status&quot;: 502,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;repeat-failure-2&quot;,
+    &quot;model&quot;: &quot;google/gemini-3-flash-preview&quot;,
+    &quot;sequence&quot;: 2,
+    &quot;status&quot;: 200,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;repeat-failure-3&quot;,
+    &quot;model&quot;: &quot;google/gemini-3-flash-preview&quot;,
+    &quot;sequence&quot;: 1,
+    &quot;status&quot;: 200,
+    &quot;reasoningNormalized&quot;: true
+  }
+]</pre></details></td></tr><tr><td>Phản hồi rỗng tiếp tục tới model có kết quả</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>[
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;empty-chain&quot;,
+    &quot;model&quot;: &quot;google/gemini-3.5-flash&quot;,
+    &quot;sequence&quot;: 1,
+    &quot;status&quot;: 200,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;empty-chain&quot;,
+    &quot;model&quot;: &quot;google/gemini-3.6-flash&quot;,
+    &quot;sequence&quot;: 2,
+    &quot;status&quot;: 200,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;empty-chain&quot;,
+    &quot;model&quot;: &quot;anthropic/claude-haiku-4.5&quot;,
+    &quot;sequence&quot;: 3,
+    &quot;status&quot;: 200,
+    &quot;reasoningNormalized&quot;: true
+  }
+]</pre></details></td></tr><tr><td>Chuỗi lỗi dừng sau tối đa 5 model</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>[
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;all-fail&quot;,
+    &quot;model&quot;: &quot;google/gemini-3.5-flash&quot;,
+    &quot;sequence&quot;: 1,
+    &quot;status&quot;: 502,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;all-fail&quot;,
+    &quot;model&quot;: &quot;google/gemini-3.6-flash&quot;,
+    &quot;sequence&quot;: 2,
+    &quot;status&quot;: 502,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;all-fail&quot;,
+    &quot;model&quot;: &quot;anthropic/claude-haiku-4.5&quot;,
+    &quot;sequence&quot;: 3,
+    &quot;status&quot;: 502,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;all-fail&quot;,
+    &quot;model&quot;: &quot;zai/glm-5.3&quot;,
+    &quot;sequence&quot;: 4,
+    &quot;status&quot;: 502,
+    &quot;reasoningNormalized&quot;: true
+  },
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;all-fail&quot;,
+    &quot;model&quot;: &quot;google/gemini-3.5-flash-lite&quot;,
+    &quot;sequence&quot;: 5,
+    &quot;status&quot;: 502,
+    &quot;reasoningNormalized&quot;: true
+  }
+]</pre></details></td></tr><tr><td>Model chỉ định không bị thay bằng fallback</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>[
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;explicit-pin-fails&quot;,
+    &quot;model&quot;: &quot;openai/gpt-4o-mini&quot;,
+    &quot;sequence&quot;: 1,
+    &quot;status&quot;: 502,
+    &quot;reasoningNormalized&quot;: true
+  }
+]</pre></details></td></tr><tr><td>Mất phản hồi không làm gửi lại request</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>[
+  {
+    &quot;gateway&quot;: &quot;stable&quot;,
+    &quot;tag&quot;: &quot;lost-response&quot;,
+    &quot;model&quot;: &quot;google/gemini-3-flash-preview&quot;,
+    &quot;sequence&quot;: 1,
+    &quot;status&quot;: &quot;socket-closed&quot;,
+    &quot;reasoningNormalized&quot;: true
+  }
+]</pre></details></td></tr><tr><td>SSE giữ nội dung và dấu kết thúc</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;status&quot;: 200,
+  &quot;done&quot;: true
+}</pre></details></td></tr><tr><td>Giá cao bị chặn trước khi gửi</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;status&quot;: 429,
+  &quot;upstreamSends&quot;: 0
+}</pre></details></td></tr><tr><td>Giá cố định bằng 0 không vượt spend limit</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;status&quot;: 429,
+  &quot;upstreamSends&quot;: 0
+}</pre></details></td></tr><tr><td>Host và Origin không tin cậy bị từ chối</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;initialDriverFailure&quot;: {
+    &quot;error&quot;: &quot;Expected values to be strictly equal:\n\n429 !== 403\n&quot;
+  },
+  &quot;recheck&quot;: {
+    &quot;checkedAt&quot;: &quot;2026-10-22T14:32:04.813Z&quot;,
+    &quot;revision&quot;: &quot;422774fe3ba3d94c3e9be2e7082945ed54222770&quot;,
+    &quot;binarySha256&quot;: &quot;5bd95979b1176002133def84734e3b98cd6d70cb107d58627ffb00cede9f7a27&quot;,
+    &quot;transport&quot;: &quot;node:http sends the literal Host header&quot;,
+    &quot;originalDriverIssue&quot;: &quot;Node fetch ignored the overridden Host header and sent the loopback host; its 429 was a driver error, not a guard failure.&quot;,
+    &quot;results&quot;: [
+      {
+        &quot;headers&quot;: {
+          &quot;Origin&quot;: &quot;https://attacker.invalid&quot;
+        },
+        &quot;status&quot;: 403
+      },
+      {
+        &quot;headers&quot;: {
+          &quot;Origin&quot;: &quot;null&quot;
+        },
+        &quot;status&quot;: 403
+      },
+      {
+        &quot;headers&quot;: {
+          &quot;Host&quot;: &quot;attacker.invalid&quot;
+        },
+        &quot;status&quot;: 403
+      },
+      {
+        &quot;headers&quot;: {
+          &quot;Sec-Fetch-Site&quot;: &quot;cross-site&quot;
+        },
+        &quot;status&quot;: 403
+      }
+    ],
+    &quot;upstreamSends&quot;: 0
+  },
+  &quot;evidenceFile&quot;: &quot;host-origin-probe.json&quot;
+}</pre></details></td></tr><tr><td>Prompt CJK dài được nâng tier theo số token</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;tier&quot;: &quot;COMPLEX&quot;,
+  &quot;reason&quot;: &quot;Input exceeds 100000 tokens&quot;
+}</pre></details></td></tr><tr><td>Reservation đồng thời và settlement trả lại ngân sách</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;first&quot;: 200,
+  &quot;whileInFlight&quot;: 429,
+  &quot;afterSettlement&quot;: 200
+}</pre></details></td></tr><tr><td>Refresh 5 phút và phục hồi catalog</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;intervals&quot;: [
+    {
+      &quot;gateway&quot;: &quot;stable&quot;,
+      &quot;intervalMs&quot;: 300011
+    },
+    {
+      &quot;gateway&quot;: &quot;recovery&quot;,
+      &quot;intervalMs&quot;: 300012
+    }
+  ],
+  &quot;lastGoodRetained&quot;: true,
+  &quot;recoveredFromInvalidStartup&quot;: true
+}</pre></details></td></tr><tr><td>Accounting chỉ ghi vào thư mục thử nghiệm</td><td class="ok">Đạt</td><td><details><summary>Chi tiết</summary><pre>{
+  &quot;isolatedProfiles&quot;: 3,
+  &quot;historyCounts&quot;: [
+    20,
+    0,
+    2
+  ],
+  &quot;syntheticOnly&quot;: true
+}</pre></details></td></tr></tbody></table></section>
+  <section class="card"><h2>Browser và đóng tiến trình</h2><p class="muted">Playwright xác minh health, catalog và chat từ cùng origin; điều hướng cross-site nhận HTTP 403. Các tiến trình CLI thử nghiệm đã thoát và các cổng của chúng không còn truy cập được.</p><details><summary>Bằng chứng chi tiết</summary><pre>{
+  &quot;browser&quot;: {
+    &quot;chatStatus&quot;: 200,
+    &quot;sameOriginHealthStatus&quot;: &quot;ok&quot;,
+    &quot;chatModel&quot;: &quot;fixture/reasoner&quot;,
+    &quot;requestFetchSite&quot;: &quot;same-origin&quot;,
+    &quot;driver&quot;: &quot;MCP Playwright&quot;,
+    &quot;catalogDiscovered&quot;: true,
+    &quot;healthVersion&quot;: &quot;422774f&quot;,
+    &quot;crossSiteNavigationStatusObserved&quot;: 403
+  },
+  &quot;shutdown&quot;: {
+    &quot;allOwnedProcessesExited&quot;: true,
+    &quot;portsClosed&quot;: true
+  }
+}</pre></details></section>
+  <section class="card"><h2>Hiệu chỉnh công cụ kiểm tra</h2><p class="muted">Lần đầu, Node fetch bỏ qua Host giả mạo nên phép thử nhận 429. Gửi lại bằng HTTP trực tiếp giữ nguyên Host cho kết quả 403 ở cả bốn tình huống, không gửi request tới gateway. Bằng chứng lỗi ban đầu và lần kiểm tra lại đều được giữ trong JSON.</p></section>
+  <section class="card"><h2>Giới hạn của kết luận</h2><p class="muted">Repo chưa có môi trường staging từ xa được cấu hình. Không gọi model live, không có giao dịch thanh toán và không thay đổi dịch vụ đang phục vụ. Phí trong fixture là dữ liệu giả để kiểm tra accounting.</p><p><a href="upstream-smoke.json">Bằng chứng JSON</a></p></section><footer>DOSRouter - cập nhật 2026-10-22T14:38:08.308Z</footer></html>

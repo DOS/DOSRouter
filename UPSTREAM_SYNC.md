@@ -30,6 +30,22 @@ These upstream areas are excluded (TS/npm-specific):
 
 ## Sync Log
 
+### 2026-10-22 - Post-merge runtime acceptance (in progress)
+
+- Owner: Codex, branch `codex/smoke-upstream-20261022`.
+- Revision under test: merged main `422774fe3ba3d94c3e9be2e7082945ed54222770`.
+- Outcome: verify the actual standalone CLI process over HTTP and a browser.
+- Scope: DOSRouter test harness and evidence; isolated localhost gateway and
+  synthetic state only. No provider charge, credentials or remote rollout.
+- Acceptance: binary revision/hash, startup catalog refresh, explicit model
+  and free aliases, fallback/outcomes, streaming, spend admission, local trust,
+  clean shutdown and browser readback with machine-readable evidence.
+- Environment discovery: GitHub environments list is empty; the current
+  process has no DOSROUTER_UPSTREAM, DOSROUTER_PORT or DOSROUTER_API_KEY.
+  Historical npm/Docker plans do not describe this standalone Go runtime.
+- Next: build the clean merged revision, run process-level smoke scenarios,
+  preserve results and close any reproduced acceptance failure within scope.
+
 ### 2026-10-22 - Sync through 0.12.297 source
 
 Owner: Codex, branch `codex/sync-clawrouter-20261022`. Compared the previous
