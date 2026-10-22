@@ -556,7 +556,16 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				currentSpend.release()
 				accounted[currentSpend] = true
 			}
-			errBody, _ := io.ReadAll(tryResp.Body)
+			errBody, readErr := readResponseBody(tryResp.Body, maxErrorResponseBytes)
+			if readErr != nil {
+				tryResp.Body.Close()
+				timer.Stop()
+				cancelAttempt()
+				if r.Context().Err() == nil {
+					http.Error(w, "Incomplete upstream error response", http.StatusBadGateway)
+				}
+				return
+			}
 			if r.Context().Err() == nil && tryResp.StatusCode >= 500 && !paymentFailure(errBody) && !strings.Contains(strings.ToLower(string(errBody)), "overload") {
 				s.outcomes.record(tryModel, requestKind, false, time.Now())
 			}
@@ -585,7 +594,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			if id := gatewayRequestID(tryResp.Header); id != "" {
 				w.Header().Set("X-DOSRouter-Request-Id", id)
 			}
-			respBody, readErr = io.ReadAll(tryResp.Body)
+			respBody, readErr = readResponseBody(tryResp.Body, maxChatResponseBytes)
 			tryResp.Body.Close()
 			currentSpend.header = tryResp.Header
 			if readErr != nil {

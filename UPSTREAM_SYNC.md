@@ -81,6 +81,9 @@ language minimum and module dependencies stay unchanged. Re-run the existing
 security, build/race and CodeQL jobs on the resulting head before merge.
 The same govulncheck command then passed locally with zero reachable
 vulnerabilities (18 module-level advisories remain in code not called here).
+Review hardening: bound non-streaming chat bodies to 64 MiB and error bodies
+to 1 MiB. Incomplete/oversized bodies stop fallback and preserve accounting;
+boundary tests and the existing truncated-response settlement regression pass.
 
 ### 2026-09-22 - Sync to the v0.12.279 release
 

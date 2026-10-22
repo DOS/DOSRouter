@@ -15,6 +15,10 @@ Aliases, free-product identity, proven tool support and automatic routing
 policy remain defined by DOSRouter source. Newly discovered chat models are
 available by explicit ID; remote zero-price claims cannot bypass spend limits.
 
+Non-streaming chat responses are bounded to 64 MiB, and upstream error bodies
+to 1 MiB. An oversized or incomplete response fails without repeating the
+send; accounting conservatively retains the known charge or reservation.
+
 ## Table of Contents
 
 - [Environment Variables](#environment-variables)
