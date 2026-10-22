@@ -59,9 +59,17 @@ These upstream areas are excluded (TS/npm-specific):
   probe passed 16 immediate scenarios, preserved the exact assistant message
   and model, and confirmed owned-process shutdown on Ctrl+C during the timer
   wait. It makes no claim for the interrupted refresh scenario.
+- CodeRabbit's subsequent review added browser-proof correlation and cleanup
+  on a failed concurrency assertion. The finish endpoint now rejects missing
+  gateway-chat evidence or mismatched browser fields; the renderer checks the
+  correlation too. An injected unexpected concurrency response still releases
+  and settles the held request. A final-source process probe passed all 16
+  immediate scenarios and interrupt shutdown. External MCP browser observations
+  remain operator attestations, with gateway chat independently correlated.
 - Evidence: [Vietnamese report](docs/validation/2026-10-22/upstream-smoke.html),
   [initial run and correction](docs/validation/2026-10-22/upstream-smoke.json),
   [full rerun and final-source probes](docs/validation/2026-10-22/harness-recheck.json)
+  [failure-path and final delta probes](docs/validation/2026-10-22/harness-failure-probes.json)
   and [report browser readback](docs/validation/2026-10-22/report-browser.json).
 - Remaining boundary: remote staging, paid-provider behavior and deployment
   remain unverified because no target environment is configured or authorized.

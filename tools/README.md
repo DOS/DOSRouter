@@ -29,6 +29,13 @@ endpoint. This records that proof and stops the CLI children. POST `/__stop` to
 close the remaining fixture. Ctrl+C also stops owned children. These control
 endpoints exist only in this synthetic test fixture, never in the product.
 
+The proof must identify MCP Playwright, the expected health revision, catalog,
+same-origin chat model/status, fetch-site and cross-site status. Its chat must
+match a `browser-same-origin` request in the independent gateway trace; otherwise
+the finish endpoint returns 422 and the report cannot pass browser acceptance.
+Health/catalog/browser-guard observations remain external driver attestations,
+not facts that the upstream gateway can independently observe.
+
 Reports must distinguish synthetic process acceptance from live provider or
 deployment evidence. Review corrections to the test driver separately and keep
 the original failed observation alongside any same-binary recheck.

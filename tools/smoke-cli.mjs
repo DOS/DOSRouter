@@ -1,4 +1,5 @@
 import { renderReport } from './smoke-report.mjs';
+import { validateBrowserProof } from './browser-proof.mjs';
 // Process acceptance against synthetic localhost services, with isolated state.
 import assert from 'node:assert/strict';
 import { createHash, randomUUID } from 'node:crypto';
@@ -71,7 +72,7 @@ server=http.createServer(async(r,w)=>{
     const url=new URL(r.url,'http://127.0.0.1');
     if(url.pathname==='/'||url.pathname==='/report'){w.setHeader('Content-Type','text/html; charset=utf-8');w.end(report());return;}
     if(url.pathname==='/evidence.json'||url.pathname==='/upstream-smoke.json'){w.setHeader('Content-Type','application/json');w.end(JSON.stringify(evidence));return;}
-    if(url.pathname==='/__finish'&&r.method==='POST'){if(!evidence.apiFinishedAt){w.writeHead(409);w.end('API checks still running');return;}let body='';for await(const chunk of r)body+=chunk;evidence.browser=JSON.parse(body);await stopChildren();evidence.finishedAt=new Date().toISOString();await save();w.end('ok');return;}
+    if(url.pathname==='/__finish'&&r.method==='POST'){if(!evidence.apiFinishedAt){w.writeHead(409);w.end('API checks still running');return;}let body='';for await(const chunk of r)body+=chunk;try{evidence.browser=validateBrowserProof(JSON.parse(body),evidence);}catch(error){w.writeHead(422);w.end(error.message);return;}await stopChildren();evidence.finishedAt=new Date().toISOString();await save();w.end('ok');return;}
     if(url.pathname==='/__stop'&&r.method==='POST'){await stopChildren();w.end('ok');server.close();return;}
     const gateway=url.pathname.split('/')[1];
     if(!Object.hasOwn(modes,gateway)){w.writeHead(404);w.end();return;}
@@ -131,7 +132,7 @@ await check('expensive-admission','Giá cao bị chặn trước khi gửi',asyn
 await check('zero-flat','Giá cố định bằng 0 không vượt spend limit',async()=>{const res=await chat(stable.base,'zero-flat','fixture/zero');assert.equal(res.status,429);assert.equal(traceFor('zero-flat').length,0);return{status:res.status,upstreamSends:0};});
 await check('local-trust','Host và Origin không tin cậy bị từ chối',async()=>{const statuses=[],before=evidence.trace.length;for(const headers of[{Origin:'https://attacker.invalid'},{Origin:'null'},{Host:'attacker.invalid'},{'Sec-Fetch-Site':'cross-site'}]){const res=await rawRequest(stable.base,'/v1/chat/completions',{},headers);assert.equal(res.status,403);statuses.push(res.status);}assert.equal(evidence.trace.length,before);return{statuses,upstreamSends:0};});
 await check('cjk','Prompt CJK dài được nâng tier theo số token',async()=>{const res=await jsonRequest(stable.base,'/debug',{prompt:'中'.repeat(110000),max_tokens:16});assert.equal(res.status,200);assert.equal(res.body.decision.Tier,'COMPLEX');assert(res.body.decision.Reasoning.includes('Input exceeds'));return{tier:res.body.decision.Tier,reason:res.body.decision.Reasoning};});
-await check('concurrency','Reservation đồng thời và settlement trả lại ngân sách',async()=>{const held=new Promise(resolve=>{markHold=resolve;});const first=chat(concurrency.base,'concurrency-first','fixture/reasoner',{max_tokens:10000});await Promise.race([held,sleep(10000).then(()=>{throw Error('first request never arrived');})]);const second=await chat(concurrency.base,'concurrency-second','fixture/reasoner',{max_tokens:10000});assert.equal(second.status,429);assert.equal(traceFor('concurrency-second').length,0);releaseHold();assert.equal((await first).status,200);const third=await chat(concurrency.base,'concurrency-third','fixture/reasoner',{max_tokens:10000});assert.equal(third.status,200);return{first:200,whileInFlight:429,afterSettlement:200};});
+await check('concurrency','Reservation đồng thời và settlement trả lại ngân sách',async()=>{const held=new Promise(resolve=>{markHold=resolve;});const first=chat(concurrency.base,'concurrency-first','fixture/reasoner',{max_tokens:10000});first.catch(()=>{});let released=false;const release=()=>{if(!released){released=true;releaseHold?.();}};try{await Promise.race([held,sleep(10000).then(()=>{throw Error('first request never arrived');})]);const second=await chat(concurrency.base,'concurrency-second','fixture/reasoner',{max_tokens:10000});assert.equal(second.status,429);assert.equal(traceFor('concurrency-second').length,0);release();assert.equal((await first).status,200);const third=await chat(concurrency.base,'concurrency-third','fixture/reasoner',{max_tokens:10000});assert.equal(third.status,200);return{first:200,whileInFlight:429,afterSettlement:200};}finally{release();await first.catch(()=>{});}});
 const stableTick=new Promise(resolve=>tickWaiters.set('stable:2',resolve));
 const recoveryTick=new Promise(resolve=>tickWaiters.set('recovery:2',resolve));
 modes.stable='invalid';modes.recovery='valid';

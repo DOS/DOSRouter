@@ -1,7 +1,8 @@
+import { browserProofPassed } from './browser-proof.mjs';
 const escape = v => String(v).replace(/[&<>"']/g, c => ({ '&':'&amp;', '<':'&lt;', '>':'&gt;', '"':'&quot;', "'":'&#39;' }[c]));
 export function renderReport(evidence) {
   const passed = evidence.checks.filter(c => c.pass).length;
-  const browserPassed = evidence.browser?.sameOriginHealthStatus === 'ok' && evidence.browser?.chatStatus === 200 && evidence.browser?.catalogDiscovered === true && evidence.browser?.crossSiteNavigationStatusObserved === 403;
+  const browserPassed = browserProofPassed(evidence.browser, evidence);
   const shutdownPassed = evidence.shutdown?.allOwnedProcessesExited === true && evidence.shutdown?.portsClosed === true;
   return `<!doctype html><html lang="vi"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><meta name="color-scheme" content="dark"><title>DOSRouter - Xác minh runtime</title><style>
   :root{color-scheme:dark;font-family:Segoe UI,system-ui,sans-serif;background:#101014;color:#eee}body{max-width:1080px;margin:auto;padding:36px 22px}h1{font-size:32px;margin:8px 0 16px}.brand{color:#ff4c57;font-weight:800;letter-spacing:3px}.card{background:#1b1b22;border:1px solid #34343e;border-radius:14px;padding:22px;margin:18px 0}.metrics{display:flex;gap:18px;flex-wrap:wrap}.metric{flex:1;min-width:150px;border-top:3px solid #ed3543}strong.big{font-size:30px;display:block}.muted{color:#b3b3c2;line-height:1.6}.ok{color:#7fe3ad}.bad{color:#ff7a85}code{overflow-wrap:anywhere;color:#ddd}table{border-collapse:collapse;width:100%;font-size:14px}td,th{text-align:left;padding:12px 8px;border-bottom:1px solid #34343e}pre{white-space:pre-wrap;overflow-wrap:anywhere}a{color:#ff8b94}summary{cursor:pointer}footer{color:#b3b3c2;padding:18px 0}</style>

@@ -645,7 +645,9 @@
     "driver": "MCP Playwright",
     "catalogDiscovered": true,
     "healthVersion": "422774f",
-    "crossSiteNavigationStatusObserved": 403
+    "crossSiteNavigationStatusObserved": 403,
+    "gatewayCorrelationVerified": true,
+    "evidenceKind": "External MCP browser attestation, correlated with the local gateway trace"
   },
   "shutdown": {
     "allOwnedProcessesExited": true,
@@ -660,5 +662,6 @@
       "recheckedAt": "2026-10-22T14:32:04.813Z",
       "sourceFix": "Use node:http to send the literal Host header. Runtime binary unchanged."
     }
-  ]
+  ],
+  "browserCorrelationRecordedAt": "2026-10-22T14:55:40.789Z"
 }
