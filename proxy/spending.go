@@ -24,16 +24,22 @@ type requestSpend struct {
 	header         http.Header
 	finished       bool
 	source         string
+	price          router.ModelPricing
 }
 
 func (s *Server) reserveChat(w http.ResponseWriter, req chatRequest, body []byte, model string) (*requestSpend, bool) {
+	return s.reserveChatWithPricing(w, req, body, model, s.catalogView().pricing)
+}
+
+func (s *Server) reserveChatWithPricing(w http.ResponseWriter, req chatRequest, body []byte, model string, pricing map[string]router.ModelPricing) (*requestSpend, bool) {
 	if s.spendError != nil || s.spendControl == nil {
 		http.Error(w, "Spending state unavailable", http.StatusServiceUnavailable)
 		return nil, false
 	}
-	price, known := s.modelPricing[model]
+	price, known := pricing[model]
 	limited := len(s.spendControl.GetLimits()) > 0
-	if !known && limited {
+	zeroCost := price.FlatPrice == nil && price.InputPrice == 0 && price.OutputPrice == 0 || price.FlatPrice != nil && *price.FlatPrice == 0
+	if limited && (!known || zeroCost && !strings.HasPrefix(model, "free/")) {
 		http.Error(w, "Unknown model cost under configured spend limits", http.StatusTooManyRequests)
 		return nil, false
 	}
@@ -79,7 +85,7 @@ func (s *Server) reserveChat(w http.ResponseWriter, req chatRequest, body []byte
 		json.NewEncoder(w).Encode(map[string]any{"error": check.Reason, "blockedBy": check.BlockedBy, "remaining": check.Remaining})
 		return nil, false
 	}
-	return &requestSpend{server: s, id: id, model: model, estimate: estimate, cost: estimate, source: "estimate", completions: n}, true
+	return &requestSpend{server: s, id: id, model: model, estimate: estimate, cost: estimate, source: "estimate", completions: n, price: price}, true
 }
 
 func (sp *requestSpend) readUsage(body []byte) {
@@ -106,7 +112,8 @@ func (sp *requestSpend) finish(body []byte) {
 	if cost, ok := settledCost(sp.header); ok {
 		sp.cost, sp.source = cost, "gateway"
 	} else if (sp.usageKnown || sp.input > 0 || sp.output > 0) && sp.input >= 0 && sp.output >= 0 {
-		if p, ok := sp.server.modelPricing[sp.model]; ok {
+		{
+			p := sp.price
 			sp.cost = (float64(sp.input)*p.InputPrice + float64(sp.output)*p.OutputPrice) / 1_000_000
 			if p.FlatPrice != nil {
 				sp.cost = *p.FlatPrice * float64(sp.completions)

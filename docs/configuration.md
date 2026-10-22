@@ -2,6 +2,23 @@
 
 Complete reference for DOSRouter configuration options.
 
+The standalone server listens on `127.0.0.1`. All routes reject non-local
+Host headers, cross-site or opaque Origin headers, and cross-site browser
+requests. Native local clients can omit Origin. Embedded servers should bind
+to loopback and use `Server.Handler()` to retain these HTTP protections.
+
+While serving, model metadata refreshes from the configured upstream's
+`/v1/models?format=json` at startup and every five minutes, using only the
+configured upstream API key. A failed or malformed refresh keeps the last good
+snapshot and logs a generic warning. No other catalog host is contacted.
+Aliases, free-product identity, proven tool support and automatic routing
+policy remain defined by DOSRouter source. Newly discovered chat models are
+available by explicit ID; remote zero-price claims cannot bypass spend limits.
+
+Non-streaming chat responses are bounded to 64 MiB, and upstream error bodies
+to 1 MiB. An oversized or incomplete response fails without repeating the
+send; accounting conservatively retains the known charge or reservation.
+
 ## Table of Contents
 
 - [Environment Variables](#environment-variables)

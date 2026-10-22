@@ -17,7 +17,7 @@ func DefaultRoutingConfig() RoutingConfig {
 
 		Scoring: defaultScoringConfig(),
 
-		// Tier chains from router-core 5ee7c23c993013a8052588191569db5cf7fb793c.
+		// Tier chains from router-core 8773a9954b091bd0090acdfec67c75a006c0e156.
 		// NVIDIA free IDs use the DOS catalog namespace.
 		Tiers: map[Tier]TierConfig{
 			TierSimple: {
@@ -84,7 +84,7 @@ func DefaultRoutingConfig() RoutingConfig {
 			TierSimple: {
 				Primary: "free/nemotron-3.5-lightning",
 				Fallback: []string{
-					"free/nemotron-3-nano-30b",
+					"free/nemotron-3-nano-omni-30b-a3b-reasoning",
 					"google/gemini-2.5-flash-lite",
 					"zai/glm-5.3-flash",
 					"openai/gpt-5.6-luna",

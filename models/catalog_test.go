@@ -22,12 +22,16 @@ func TestSyncedCatalogEconomicsAndLimits(t *testing.T) {
 		{"openai/chat-latest", 5, 30, 128000, 128000},
 		{"anthropic/claude-fable-5", 10, 50, 1000000, 128000},
 		{"anthropic/claude-sonnet-4.6", 3, 15, 1000000, 128000},
-		{"anthropic/claude-sonnet-5", 3, 15, 1000000, 128000},
+		{"anthropic/claude-sonnet-5", 2, 10, 1000000, 128000},
 		{"moonshot/kimi-k3", 3, 15, 1048576, 65536},
 		{"google/gemini-3.8-flash", 0.75, 3.75, 1048576, 65536},
 		{"google/gemini-3.6-flash", 0.75, 3.75, 1048576, 65536},
 		{"deepseek/deepseek-v4-pro", 1.32, 3.96, 1048576, 65536},
-		{"deepseek/deepseek-v4-flash-vision-exp", 0.44, 1.32, 1048576, 65536},
+		{"deepseek/deepseek-v4-flash-vision-exp", 0.30, 1.20, 1048576, 65536},
+		{"openai/gpt-6.1-sol", 2, 10, 1050000, 128000},
+		{"deepseek/deepseek-v4.1-flash", 0.14, 0.28, 1048576, 65536},
+		{"mistral/mistral-large-4", 1.36, 4.18, 524288, 262144},
+		{"google/gemini-4-argon", 2, 10, 1048576, 65536},
 		{"qwen/qwen3.8-flash", 0.15, 0.47, 1000000, 131072},
 		{"xiaomi/mimo-v2.5", 0.14, 0.28, 1048576, 131072},
 		{"zai/glm-5.3", 1.4, 4.4, 1000000, 131072},
@@ -46,6 +50,18 @@ func TestSyncedCatalogEconomicsAndLimits(t *testing.T) {
 				t.Errorf("context/output = %d/%d, want %d/%d", m.ContextWindow, m.MaxOutput, tc.context, tc.max)
 			}
 		})
+	}
+}
+
+func TestRetiredTencentShorthandsResolveActiveMetadata(t *testing.T) {
+	for _, alias := range []string{"hunyuan", "hy3", "tencent"} {
+		m := GetModel(ResolveModelAlias(alias))
+		if m == nil || m.Deprecated {
+			t.Errorf("%s still targets retired metadata", alias)
+		}
+	}
+	if ResolveModelAlias("tencent/hy3") != "tencent/hy3" {
+		t.Fatal("explicit compatibility pin changed")
 	}
 }
 
