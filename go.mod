@@ -2,7 +2,7 @@ module github.com/DOS/DOSRouter
 
 go 1.25.0
 
-toolchain go1.26.6
+toolchain go1.26.10
 
 require (
 	golang.org/x/crypto v0.50.0 // indirect

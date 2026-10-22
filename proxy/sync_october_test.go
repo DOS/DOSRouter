@@ -69,3 +69,12 @@ func TestSyncEmptyTurnsUseWholeFallbackChain(t *testing.T) {
 		t.Fatalf("empty turn recovery: status=%d calls=%d body=%s", w.Code, calls, w.Body.String())
 	}
 }
+
+func TestEmptyToolArraysAreEmptyTurns(t *testing.T) {
+	if !isEmptyTurn([]byte(`{"choices":[{"message":{"content":" ","tool_calls":[]},"finish_reason":"stop"}]}`)) {
+		t.Fatal("empty tool array hid an empty response")
+	}
+	if isEmptyTurn([]byte(`{"choices":[{"message":{"content":""},"finish_reason":"stop"},{"message":{"content":"usable"},"finish_reason":"stop"}]}`)) {
+		t.Fatal("usable alternate completion was discarded")
+	}
+}

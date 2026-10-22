@@ -73,6 +73,15 @@ scan, CodeQL, final-head review and merge acceptance are recorded on the sync
 PR. Scope is DOSRouter source and documentation only; no deployment, paid
 provider request, credential change or cross-repository write is included.
 
+CI unblock: the first scanner run on `35a4b8c` found 10 reachable standard
+library advisories in Go 1.26.6, including GO-2026-6809 (fixed in 1.26.10)
+and the Go 1.26.9 HTTP/TLS fixes. No open PR owns this module change. The
+smallest unblock raises only the preferred toolchain to Go 1.26.10; the Go
+language minimum and module dependencies stay unchanged. Re-run the existing
+security, build/race and CodeQL jobs on the resulting head before merge.
+The same govulncheck command then passed locally with zero reachable
+vulnerabilities (18 module-level advisories remain in code not called here).
+
 ### 2026-09-22 - Sync to the v0.12.279 release
 
 Verified the upstream release list, fetched tags, and compared the previous

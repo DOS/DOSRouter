@@ -2,6 +2,7 @@ package proxy
 
 import (
 	"context"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -111,5 +112,29 @@ func TestRemoteFreeClaimCannotBypassSpendLimits(t *testing.T) {
 	w := httptest.NewRecorder()
 	if _, allowed := srv.reserveChat(w, chatRequest{}, []byte(`{}`), "vendor/free-claim"); allowed || w.Code != 429 {
 		t.Fatalf("untrusted free claim bypassed limits: %d", w.Code)
+	}
+}
+
+func TestCatalogReasoningMetadataReachesForwardedRequest(t *testing.T) {
+	srv, _ := syncTestServer(t, func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet {
+			io.WriteString(w, `{"data":[{"id":"vendor/reasoner","name":"Reasoner","categories":["chat","reasoning"],"billing_mode":"paid","pricing":{"input":1,"output":2}}]}`)
+			return
+		}
+		var req chatRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Error(err)
+		}
+		if len(req.Messages) < 2 || req.Messages[1].ReasoningContent == nil {
+			t.Error("catalog reasoning metadata was ignored")
+		}
+		syncTestOK(w)
+	}, nil)
+	if err := srv.refreshCatalog(context.Background()); err != nil {
+		t.Fatal(err)
+	}
+	w := syncTestChat(t, srv, `{"model":"vendor/reasoner","messages":[{"role":"user","content":"hi"},{"role":"assistant","content":"hello"},{"role":"user","content":"continue"}]}`)
+	if w.Code != 200 {
+		t.Fatalf("status=%d", w.Code)
 	}
 }

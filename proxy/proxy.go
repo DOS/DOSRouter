@@ -400,11 +400,6 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// Rewrite model in request body
 	req.Model = resolvedModel
 
-	// Normalize assistant messages for reasoning models (upstream v0.12.92)
-	if models.IsReasoningModel(resolvedModel) {
-		req.Messages = normalizeMessagesForThinking(req.Messages)
-	}
-
 	// Validate request can be marshaled (actual marshaling happens per-model in fallback loop)
 	if _, err := json.Marshal(req); err != nil {
 		http.Error(w, "Failed to marshal request", http.StatusInternalServerError)
@@ -503,8 +498,12 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			req.MaxTokens = 4096
 		}
 		req.Model = tryModel
-		tryBody, _ := json.Marshal(req)
-		currentSpend, ok := s.reserveChatWithPricing(w, req, tryBody, tryModel, catalog.pricing)
+		tryReq := req
+		if m := catalog.model(tryModel); m != nil && m.Reasoning {
+			tryReq.Messages = normalizeMessagesForThinking(req.Messages)
+		}
+		tryBody, _ := json.Marshal(tryReq)
+		currentSpend, ok := s.reserveChatWithPricing(w, tryReq, tryBody, tryModel, catalog.pricing)
 		if !ok {
 			return
 		}
@@ -522,7 +521,11 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		// clearTimeout-on-success behavior. Derived from r.Context() so a client
 		// disconnect still cancels the in-flight attempt.
 		attemptCtx, cancelAttempt := context.WithCancel(r.Context())
-		timer := time.AfterFunc(perModelTimeout(tryModel), cancelAttempt)
+		attemptTimeout := perModelTimeout(tryModel)
+		if m := catalog.model(tryModel); m != nil && m.Reasoning {
+			attemptTimeout = perModelTimeoutReasoning
+		}
+		timer := time.AfterFunc(attemptTimeout, cancelAttempt)
 		tryResp, tryErr := retry.Do(attemptCtx, makeReqFor(tryBody), retry.WithClient(s.httpClient), retry.WithNetworkRetries(false), retry.WithMaxRetries(0))
 		timedOut := attemptCtx.Err() != nil
 		if tryResp != nil && tryResp.StatusCode >= 300 {
@@ -554,7 +557,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				accounted[currentSpend] = true
 			}
 			errBody, _ := io.ReadAll(tryResp.Body)
-			if tryResp.StatusCode >= 500 && !paymentFailure(errBody) && !strings.Contains(strings.ToLower(string(errBody)), "overload") {
+			if r.Context().Err() == nil && tryResp.StatusCode >= 500 && !paymentFailure(errBody) && !strings.Contains(strings.ToLower(string(errBody)), "overload") {
 				s.outcomes.record(tryModel, requestKind, false, time.Now())
 			}
 			tryResp.Body.Close()
@@ -687,7 +690,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				if json.Unmarshal([]byte(line[6:]), &chunk) == nil {
 					if chunk["error"] != nil {
 						streamFailure = true
-						streamPaymentFailure = paymentFailure([]byte(line))
+						streamPaymentFailure = streamPaymentFailure || paymentFailure([]byte(line))
 					}
 					// Track usage tokens
 					if u, ok := chunk["usage"].(map[string]interface{}); ok {
@@ -1183,8 +1186,8 @@ func isEmptyTurn(body []byte) bool {
 	var resp struct {
 		Choices []struct {
 			Message struct {
-				Content   string          `json:"content"`
-				ToolCalls json.RawMessage `json:"tool_calls"`
+				Content   string            `json:"content"`
+				ToolCalls []json.RawMessage `json:"tool_calls"`
 			} `json:"message"`
 			FinishReason string `json:"finish_reason"`
 		} `json:"choices"`
@@ -1192,10 +1195,12 @@ func isEmptyTurn(body []byte) bool {
 	if json.Unmarshal(body, &resp) != nil || len(resp.Choices) == 0 {
 		return false
 	}
-	c := resp.Choices[0]
-	return c.Message.Content == "" &&
-		(len(c.Message.ToolCalls) == 0 || string(c.Message.ToolCalls) == "null") &&
-		c.FinishReason == "stop"
+	for _, c := range resp.Choices {
+		if strings.TrimSpace(c.Message.Content) != "" || len(c.Message.ToolCalls) > 0 || c.FinishReason != "stop" {
+			return false
+		}
+	}
+	return true
 }
 
 // CostBreakdown is the usage.cost payload injected into every routed response.
