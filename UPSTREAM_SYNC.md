@@ -84,6 +84,11 @@ vulnerabilities (18 module-level advisories remain in code not called here).
 Review hardening: bound non-streaming chat bodies to 64 MiB and error bodies
 to 1 MiB. Incomplete/oversized bodies stop fallback and preserve accounting;
 boundary tests and the existing truncated-response settlement regression pass.
+The completed baseline CodeRabbit review identified three Go adaptation edges:
+retarget bare Tencent/Hy3/Hunyuan aliases directly to the declared Qwen
+successor (keep exact `tencent/hy3` pins), reject remote zero flat-price claims
+under spend limits, and use Go's 500-character scan default for omitted or
+negative limits. Each issue has a failing-then-passing regression test.
 
 ### 2026-09-22 - Sync to the v0.12.279 release
 

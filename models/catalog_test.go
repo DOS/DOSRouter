@@ -53,6 +53,18 @@ func TestSyncedCatalogEconomicsAndLimits(t *testing.T) {
 	}
 }
 
+func TestRetiredTencentShorthandsResolveActiveMetadata(t *testing.T) {
+	for _, alias := range []string{"hunyuan", "hy3", "tencent"} {
+		m := GetModel(ResolveModelAlias(alias))
+		if m == nil || m.Deprecated {
+			t.Errorf("%s still targets retired metadata", alias)
+		}
+	}
+	if ResolveModelAlias("tencent/hy3") != "tencent/hy3" {
+		t.Fatal("explicit compatibility pin changed")
+	}
+}
+
 func TestCatalogIdentityAndRetirementInvariants(t *testing.T) {
 	seen := make(map[string]bool)
 	for _, m := range Models {

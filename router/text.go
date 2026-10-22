@@ -26,7 +26,7 @@ func isCJK(r rune) bool {
 
 func sampleForScan(text string, limit int) string {
 	if limit < 1 {
-		limit = 1
+		limit = 500 // Match the configured Go default when a caller omits this field.
 	}
 	if limit > 8000 {
 		limit = 8000

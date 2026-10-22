@@ -47,3 +47,12 @@ func TestSyncUnknownPriceDoesNotClaimSavings(t *testing.T) {
 		t.Fatalf("unknown price claims savings: %g", d.Savings)
 	}
 }
+
+func TestUnsetScanLimitUsesUsefulDefault(t *testing.T) {
+	text := strings.Repeat("x ", 300) + "prove"
+	for _, limit := range []int{0, -1} {
+		if got := sampleForScan(text, limit); !strings.Contains(got, "prove") || len(got) > 501 {
+			t.Fatalf("invalid default sample: %q", got)
+		}
+	}
+}

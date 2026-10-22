@@ -38,7 +38,8 @@ func (s *Server) reserveChatWithPricing(w http.ResponseWriter, req chatRequest, 
 	}
 	price, known := pricing[model]
 	limited := len(s.spendControl.GetLimits()) > 0
-	if limited && (!known || price.FlatPrice == nil && price.InputPrice == 0 && price.OutputPrice == 0 && !strings.HasPrefix(model, "free/")) {
+	zeroCost := price.FlatPrice == nil && price.InputPrice == 0 && price.OutputPrice == 0 || price.FlatPrice != nil && *price.FlatPrice == 0
+	if limited && (!known || zeroCost && !strings.HasPrefix(model, "free/")) {
 		http.Error(w, "Unknown model cost under configured spend limits", http.StatusTooManyRequests)
 		return nil, false
 	}

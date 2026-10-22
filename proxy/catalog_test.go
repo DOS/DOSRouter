@@ -100,18 +100,23 @@ func TestCatalogRefreshDoesNotFollowRedirects(t *testing.T) {
 }
 
 func TestRemoteFreeClaimCannotBypassSpendLimits(t *testing.T) {
-	srv, sc := syncTestServer(t, nil, nil)
-	if err := sc.SetLimit(spendcontrol.WindowSession, 1); err != nil {
-		t.Fatal(err)
-	}
-	next, err := projectCatalog([]byte(`{"data":[{"id":"vendor/free-claim","name":"Free claim","categories":["chat"],"billing_mode":"free","pricing":{}}]}`))
-	if err != nil {
-		t.Fatal(err)
-	}
-	srv.catalog = &next
-	w := httptest.NewRecorder()
-	if _, allowed := srv.reserveChat(w, chatRequest{}, []byte(`{}`), "vendor/free-claim"); allowed || w.Code != 429 {
-		t.Fatalf("untrusted free claim bypassed limits: %d", w.Code)
+	for _, row := range []string{
+		`{"id":"vendor/free-claim","name":"Free claim","categories":["chat"],"billing_mode":"free","pricing":{}}`,
+		`{"id":"vendor/free-claim","name":"Free claim","categories":["chat"],"billing_mode":"flat","pricing":{"flat":0}}`,
+	} {
+		srv, sc := syncTestServer(t, nil, nil)
+		if err := sc.SetLimit(spendcontrol.WindowSession, 1); err != nil {
+			t.Fatal(err)
+		}
+		next, err := projectCatalog([]byte(`{"data":[` + row + `]}`))
+		if err != nil {
+			t.Fatal(err)
+		}
+		srv.catalog = &next
+		w := httptest.NewRecorder()
+		if _, allowed := srv.reserveChat(w, chatRequest{}, []byte(`{}`), "vendor/free-claim"); allowed || w.Code != 429 {
+			t.Fatalf("untrusted free claim bypassed limits: %d", w.Code)
+		}
 	}
 }
 
