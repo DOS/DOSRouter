@@ -3,11 +3,11 @@ package router
 import "math"
 
 const (
-	baselineModelID        = "anthropic/claude-opus-4.6"
-	baselineInputPrice     = 5.0  // per 1M tokens
-	baselineOutputPrice    = 25.0 // per 1M tokens
-	serverMarginPercent    = 5
-	minPaymentUSD          = 0.001
+	baselineModelID     = "anthropic/claude-opus-4.7"
+	baselineInputPrice  = 5.0  // per 1M tokens
+	baselineOutputPrice = 25.0 // per 1M tokens
+	serverMarginPercent = 5
+	minPaymentUSD       = 0.001
 )
 
 // SelectModel picks the primary model for a tier and builds a RoutingDecision.
@@ -52,7 +52,7 @@ func SelectModel(
 		float64(maxOutputTokens)/1_000_000*opusOut
 
 	var savings float64
-	if routingProfile != "premium" && baselineCost > 0 {
+	if hasPricing && routingProfile != "premium" && baselineCost > 0 {
 		savings = math.Max(0, (baselineCost-costEstimate)/baselineCost)
 	}
 
@@ -111,7 +111,7 @@ func CalculateModelCost(
 	baselineCost = float64(estimatedInputTokens)/1_000_000*opusIn +
 		float64(maxOutputTokens)/1_000_000*opusOut
 
-	if routingProfile != "premium" && baselineCost > 0 {
+	if hasPricing && routingProfile != "premium" && baselineCost > 0 {
 		savings = math.Max(0, (baselineCost-costEstimate)/baselineCost)
 	}
 	return

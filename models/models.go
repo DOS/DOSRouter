@@ -36,6 +36,40 @@ type PromoDef struct {
 
 // ModelAliases maps shorthand names to full model IDs.
 var ModelAliases = map[string]string{
+	"muse-glimmer-30b":            "free/muse-glimmer-30b",
+	"muse-glimmer":                "free/muse-glimmer-30b",
+	"muse":                        "free/muse-glimmer-30b",
+	"nvidia/muse-glimmer-30b":     "free/muse-glimmer-30b",
+	"laguna-s-2.1":                "poolside/laguna-s-2.1",
+	"laguna-s":                    "poolside/laguna-s-2.1",
+	"mistral-large-4":             "mistral/mistral-large-4",
+	"grok-4-6":                    "xai/grok-4.6",
+	"grok-4.6":                    "xai/grok-4.6",
+	"grok-4-7":                    "xai/grok-4.7",
+	"grok-4.7":                    "xai/grok-4.7",
+	"hy4-preview":                 "tencent/hy4-preview",
+	"hy4":                         "tencent/hy4-preview",
+	"qwen3-8-max":                 "qwen/qwen3.8-max",
+	"qwen-3.8-max":                "qwen/qwen3.8-max",
+	"qwen3.8-max":                 "qwen/qwen3.8-max",
+	"v4.1-flash":                  "deepseek/deepseek-v4.1-flash",
+	"deepseek-v4-1-flash":         "deepseek/deepseek-v4.1-flash",
+	"deepseek-v4.1-flash":         "deepseek/deepseek-v4.1-flash",
+	"gpt-5.1":                     "openai/gpt-5.1",
+	"gpt-6-1-sol":                 "openai/gpt-6.1-sol",
+	"gpt-6.1-sol":                 "openai/gpt-6.1-sol",
+	"gpt-6-luna":                  "openai/gpt-6-luna",
+	"gpt-6-sol":                   "openai/gpt-6-sol",
+	"gpt-6-astra":                 "openai/gpt-6-astra",
+	"anthropic/claude-opus-5-5":   "anthropic/claude-opus-5.5",
+	"opus-5-5":                    "anthropic/claude-opus-5.5",
+	"opus-5.5":                    "anthropic/claude-opus-5.5",
+	"anthropic/claude-fable-5-1":  "anthropic/claude-fable-5.1",
+	"fable-5-1":                   "anthropic/claude-fable-5.1",
+	"fable-5.1":                   "anthropic/claude-fable-5.1",
+	"anthropic/claude-sonnet-5-5": "anthropic/claude-sonnet-5.5",
+	"sonnet-5-5":                  "anthropic/claude-sonnet-5.5",
+	"sonnet-5.5":                  "anthropic/claude-sonnet-5.5",
 	// Upstream chat aliases plus DOS-compatible shorthand targets.
 	// Bare Claude/Sonnet, o1, Gemini, Flash and paid DeepSeek Pro retain DOS behavior.
 	// Retired free shorthands resolve directly to an active free successor.
@@ -69,7 +103,7 @@ var ModelAliases = map[string]string{
 	"coder-free":                    "free/north-mini-code",
 	"codex":                         "openai/gpt-5.3-codex",
 	"cohere/north-mini-code":        "free/north-mini-code",
-	"deepseek":                      "deepseek/deepseek-chat",
+	"deepseek":                      "deepseek/deepseek-v4.1-flash",
 	"deepseek-chat":                 "deepseek/deepseek-chat",
 	"deepseek-free":                 "free/nemotron-3.5-lightning",
 	"deepseek-v4-flash":             "free/nemotron-3.5-lightning",
@@ -146,7 +180,7 @@ var ModelAliases = map[string]string{
 	"grok-build":                    "xai/grok-build-0.1",
 	"grok-code":                     "xai/grok-build-0.1",
 	"grok-code-fast-1":              "deepseek/deepseek-chat",
-	"grok-fast":                     "xai/grok-4-fast-reasoning",
+	"grok-fast":                     "xai/grok-4-1-fast-reasoning",
 	"haiku":                         "anthropic/claude-haiku-4.5",
 	"hunyuan":                       "tencent/hy3",
 	"hy3":                           "tencent/hy3",
@@ -180,7 +214,7 @@ var ModelAliases = map[string]string{
 	"mistral-small":                 "free/nemotron-3.5-lightning",
 	"moonshot":                      "moonshot/kimi-k2.7",
 	"nano":                          "openai/gpt-5.4-nano",
-	"nano-30b":                      "free/nemotron-3-nano-30b",
+	"nano-30b":                      "free/nemotron-3-nano-omni-30b-a3b-reasoning",
 	"nano-omni":                     "free/nemotron-3-nano-omni-30b-a3b-reasoning",
 	"nano-vl":                       "free/nemotron-3-nano-omni-30b-a3b-reasoning",
 	"nemotron":                      "free/nemotron-3.5-lightning",
@@ -189,9 +223,9 @@ var ModelAliases = map[string]string{
 	"nemotron-3.5-lightning":        "free/nemotron-3.5-lightning",
 	"nemotron-49b":                  "free/nemotron-3.5-lightning",
 	"nemotron-lightning":            "free/nemotron-3.5-lightning",
-	"nemotron-nano":                 "free/nemotron-3-nano-30b",
-	"nemotron-nano-30b":             "free/nemotron-3-nano-30b",
-	"nemotron-nano-9b":              "free/nemotron-3-nano-30b",
+	"nemotron-nano":                 "free/nemotron-3-nano-omni-30b-a3b-reasoning",
+	"nemotron-nano-30b":             "free/nemotron-3-nano-omni-30b-a3b-reasoning",
+	"nemotron-nano-9b":              "free/nemotron-3-nano-omni-30b-a3b-reasoning",
 	"nemotron-nano-vl":              "free/nemotron-3-nano-omni-30b-a3b-reasoning",
 	"nemotron-omni":                 "free/nemotron-3-nano-omni-30b-a3b-reasoning",
 	"nemotron-super":                "free/nemotron-3.5-lightning",
@@ -212,7 +246,7 @@ var ModelAliases = map[string]string{
 	"nvidia/llama-4-maverick":       "free/llama-4-maverick",
 	"nvidia/mistral-large-3-675b":   "free/nemotron-3.5-lightning",
 	"nvidia/mistral-nemotron":       "free/mistral-nemotron",
-	"nvidia/nemotron-3-nano-30b":    "free/nemotron-3-nano-30b",
+	"nvidia/nemotron-3-nano-30b":    "free/nemotron-3-nano-omni-30b-a3b-reasoning",
 	"nvidia/nemotron-3-nano-omni-30b-a3b-reasoning": "free/nemotron-3-nano-omni-30b-a3b-reasoning",
 	"nvidia/nemotron-3-super-120b":                  "free/nemotron-3.5-lightning",
 	"nvidia/nemotron-3-ultra-550b":                  "free/nemotron-3-ultra-550b",
@@ -287,7 +321,7 @@ var ModelAliases = map[string]string{
 	"v4-flash-vision":                               "deepseek/deepseek-v4-flash-vision-exp",
 	"v4-pro":                                        "free/nemotron-3.5-lightning",
 	"vision-free":                                   "free/nemotron-3-nano-omni-30b-a3b-reasoning",
-	"xai/grok-3-fast":                               "xai/grok-4-fast-reasoning",
+	"xai/grok-3-fast":                               "xai/grok-4-1-fast-reasoning",
 	"xai/grok-code-fast-1":                          "deepseek/deepseek-chat",
 	"xiaomi":                                        "xiaomi/mimo-v2.5-pro",
 }
@@ -300,7 +334,7 @@ var Models = []ModelDef{
 
 	// Routing profiles
 	{ID: "auto", Name: "Auto (Smart Router - Balanced)", InputPrice: 0, OutputPrice: 0, ContextWindow: 1050000, MaxOutput: 128000},
-	{ID: "free", Name: "Free - Nemotron 3.5 Lightning", InputPrice: 0, OutputPrice: 0, ContextWindow: 1000000, MaxOutput: 16384, Reasoning: true},
+	{ID: "free", Name: "Free → Nemotron 3.5 Lightning", InputPrice: 0, OutputPrice: 0, ContextWindow: 1000000, MaxOutput: 16384, Reasoning: true},
 	{ID: "eco", Name: "Eco (Smart Router - Cost Optimized)", InputPrice: 0, OutputPrice: 0, ContextWindow: 1050000, MaxOutput: 128000},
 	{ID: "premium", Name: "Premium (Smart Router - Best Quality)", InputPrice: 0, OutputPrice: 0, ContextWindow: 2000000, MaxOutput: 200000},
 
@@ -308,21 +342,21 @@ var Models = []ModelDef{
 	{ID: "openai/gpt-5.2", Name: "GPT-5.2", Version: "5.2", InputPrice: 1.75, OutputPrice: 14.0, ContextWindow: 400000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-5-mini", Name: "GPT-5 Mini", Version: "5.0", InputPrice: 0.25, OutputPrice: 2.0, ContextWindow: 200000, MaxOutput: 128000, ToolCalling: true},
 	{ID: "openai/gpt-5-nano", Name: "GPT-5 Nano", Version: "5.0", InputPrice: 0.05, OutputPrice: 0.4, ContextWindow: 128000, MaxOutput: 128000, ToolCalling: true, Deprecated: true, FallbackModel: "openai/gpt-5.4-nano"},
-	{ID: "openai/gpt-5.2-pro", Name: "GPT-5.2 Pro", Version: "5.2", InputPrice: 21.0, OutputPrice: 168.0, ContextWindow: 400000, MaxOutput: 128000, Reasoning: true, Vision: true, ToolCalling: true},
+	{ID: "openai/gpt-5.2-pro", Name: "GPT-5.2 Pro", Version: "5.2", InputPrice: 21, OutputPrice: 168, ContextWindow: 400000, MaxOutput: 128000, Reasoning: true, Vision: true},
 	{ID: "openai/gpt-5.6-sol", Name: "GPT-5.6 Sol", Version: "5.6", InputPrice: 4.0, OutputPrice: 20.0, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-5.6-terra", Name: "GPT-5.6 Terra", Version: "5.6", InputPrice: 2.0, OutputPrice: 12.0, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-5.6-luna", Name: "GPT-5.6 Luna", Version: "5.6", InputPrice: 0.2, OutputPrice: 1.2, ContextWindow: 1050000, MaxOutput: 128000, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-5.6-sol-pro", Name: "GPT-5.6 Sol Pro", Version: "5.6", InputPrice: 4.0, OutputPrice: 20.0, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-5.6-terra-pro", Name: "GPT-5.6 Terra Pro", Version: "5.6", InputPrice: 2.0, OutputPrice: 12.0, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
-	{ID: "openai/gpt-5.6-luna-pro", Name: "GPT-5.6 Luna Pro", Version: "5.6", InputPrice: 0.2, OutputPrice: 1.2, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/gpt-5.6-luna-pro", Name: "GPT-5.6 Luna Pro", Version: "5.6", InputPrice: 0.2, OutputPrice: 1.2, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true},
 	{ID: "openai/gpt-5.5", Name: "GPT-5.5", Version: "5.5", InputPrice: 5.0, OutputPrice: 30.0, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
-	{ID: "openai/gpt-5.5-pro", Name: "GPT-5.5 Pro", Version: "5.5", InputPrice: 30.0, OutputPrice: 180.0, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, ToolCalling: true},
+	{ID: "openai/gpt-5.5-pro", Name: "GPT-5.5 Pro", Version: "5.5", InputPrice: 30, OutputPrice: 180, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true},
 	{ID: "openai/chat-latest", Name: "ChatGPT Instant (GPT-5.5)", Version: "5.5", InputPrice: 5.0, OutputPrice: 30.0, ContextWindow: 128000, MaxOutput: 128000, Vision: true, ToolCalling: true},
 	{ID: "openai/gpt-5.4", Name: "GPT-5.4", Version: "5.4", InputPrice: 2.5, OutputPrice: 15.0, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-5.4-mini", Name: "GPT-5.4 Mini", Version: "5.4", InputPrice: 0.75, OutputPrice: 4.5, ContextWindow: 400000, MaxOutput: 128000, Vision: true, Agentic: true, ToolCalling: true},
-	{ID: "openai/gpt-5.4-pro", Name: "GPT-5.4 Pro", Version: "5.4", InputPrice: 30.0, OutputPrice: 180.0, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, ToolCalling: true},
+	{ID: "openai/gpt-5.4-pro", Name: "GPT-5.4 Pro", Version: "5.4", InputPrice: 30, OutputPrice: 180, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true},
 	{ID: "openai/gpt-5.4-nano", Name: "GPT-5.4 Nano", Version: "5.4", InputPrice: 0.2, OutputPrice: 1.25, ContextWindow: 1050000, MaxOutput: 128000, ToolCalling: true},
-	{ID: "openai/gpt-5.3", Name: "GPT-5.3", Version: "5.3", InputPrice: 1.75, OutputPrice: 14.0, ContextWindow: 128000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/gpt-5.3", Name: "GPT-5.3", Version: "5.3", InputPrice: 1.75, OutputPrice: 14, ContextWindow: 128000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true, Deprecated: true, FallbackModel: "openai/gpt-5.2"},
 	{ID: "openai/gpt-5.3-codex", Name: "GPT-5.3 Codex", Version: "5.3", InputPrice: 1.75, OutputPrice: 14.0, ContextWindow: 400000, MaxOutput: 128000, Agentic: true, ToolCalling: true},
 	{ID: "openai/gpt-4.1", Name: "GPT-4.1", Version: "4.1", InputPrice: 2.0, OutputPrice: 8.0, ContextWindow: 128000, MaxOutput: 32768, Vision: true, ToolCalling: true},
 	{ID: "openai/gpt-4.1-mini", Name: "GPT-4.1 Mini", Version: "4.1", InputPrice: 0.4, OutputPrice: 1.6, ContextWindow: 128000, MaxOutput: 32768, ToolCalling: true},
@@ -339,7 +373,7 @@ var Models = []ModelDef{
 	{ID: "anthropic/claude-haiku-4.5", Name: "Claude Haiku 4.5", Version: "4.5", InputPrice: 1.0, OutputPrice: 5.0, ContextWindow: 200000, MaxOutput: 64000, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "anthropic/claude-sonnet-4.5", Name: "Claude Sonnet 4.5", Version: "4.5", InputPrice: 3.0, OutputPrice: 15.0, ContextWindow: 200000, MaxOutput: 64000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "anthropic/claude-sonnet-4.6", Name: "Claude Sonnet 4.6", Version: "4.6", InputPrice: 3.0, OutputPrice: 15.0, ContextWindow: 1000000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
-	{ID: "anthropic/claude-sonnet-5", Name: "Claude Sonnet 5", Version: "5", InputPrice: 3.0, OutputPrice: 15.0, ContextWindow: 1000000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "anthropic/claude-sonnet-5", Name: "Claude Sonnet 5", Version: "5", InputPrice: 2, OutputPrice: 10, ContextWindow: 1000000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "anthropic/claude-opus-4.5", Name: "Claude Opus 4.5", Version: "4.5", InputPrice: 5.0, OutputPrice: 25.0, ContextWindow: 200000, MaxOutput: 64000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "anthropic/claude-opus-4.6", Name: "Claude Opus 4.6", Version: "4.6", InputPrice: 5.0, OutputPrice: 25.0, ContextWindow: 1000000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
 	{ID: "anthropic/claude-fable-5", Name: "Claude Fable 5", Version: "5", InputPrice: 10.0, OutputPrice: 50.0, ContextWindow: 1000000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
@@ -356,15 +390,15 @@ var Models = []ModelDef{
 	{ID: "google/gemini-3.6-flash", Name: "Gemini 3.6 Flash", Version: "3.6", InputPrice: 0.75, OutputPrice: 3.75, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, Vision: true, ToolCalling: true},
 	{ID: "google/gemini-3.5-flash", Name: "Gemini 3.5 Flash", Version: "3.5", InputPrice: 1.5, OutputPrice: 9.0, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, Vision: true, ToolCalling: true},
 	{ID: "google/gemini-3.5-flash-lite", Name: "Gemini 3.5 Flash Lite", Version: "3.5", InputPrice: 0.3, OutputPrice: 2.5, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, ToolCalling: true},
-	{ID: "google/gemini-3-flash-preview", Name: "Gemini 3 Flash Preview", Version: "3.0", InputPrice: 0.5, OutputPrice: 3.0, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, Vision: true},
+	{ID: "google/gemini-3-flash-preview", Name: "Gemini 3 Flash Preview", Version: "3.0", InputPrice: 0.5, OutputPrice: 3, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, Vision: true, ToolCalling: true},
 	{ID: "google/gemini-2.5-pro", Name: "Gemini 2.5 Pro", Version: "2.5", InputPrice: 1.25, OutputPrice: 10.0, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, Vision: true, ToolCalling: true},
 	{ID: "google/gemini-2.5-flash", Name: "Gemini 2.5 Flash", Version: "2.5", InputPrice: 0.3, OutputPrice: 2.5, ContextWindow: 1048576, MaxOutput: 65536, Vision: true, ToolCalling: true},
 	{ID: "google/gemini-2.5-flash-lite", Name: "Gemini 2.5 Flash Lite", Version: "2.5", InputPrice: 0.1, OutputPrice: 0.4, ContextWindow: 1048576, MaxOutput: 65536, Vision: true, ToolCalling: true},
 	{ID: "google/gemini-3.1-flash-lite", Name: "Gemini 3.1 Flash Lite", Version: "3.1", InputPrice: 0.25, OutputPrice: 1.5, ContextWindow: 1048576, MaxOutput: 65536, ToolCalling: true},
 
 	// deepseek
-	{ID: "deepseek/deepseek-chat", Name: "DeepSeek V4 Flash Chat", Version: "4-flash", InputPrice: 0.14, OutputPrice: 0.28, ContextWindow: 1048576, MaxOutput: 65536, ToolCalling: true},
-	{ID: "deepseek/deepseek-reasoner", Name: "DeepSeek V4 Flash Reasoner", Version: "4-flash", InputPrice: 0.14, OutputPrice: 0.28, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, ToolCalling: true},
+	{ID: "deepseek/deepseek-chat", Name: "DeepSeek Chat (V4.1 Flash)", Version: "4.1-flash", InputPrice: 0.14, OutputPrice: 0.28, ContextWindow: 1048576, MaxOutput: 65536, ToolCalling: true},
+	{ID: "deepseek/deepseek-reasoner", Name: "DeepSeek Reasoner (V4.1 Flash)", Version: "4.1-flash", InputPrice: 0.14, OutputPrice: 0.28, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, ToolCalling: true},
 	{ID: "deepseek/deepseek-v4-pro", Name: "DeepSeek V4 Pro", Version: "4-pro", InputPrice: 1.32, OutputPrice: 3.96, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, Agentic: true, ToolCalling: true},
 
 	// moonshot
@@ -384,14 +418,14 @@ var Models = []ModelDef{
 	{ID: "nvidia/kimi-k2.5", Name: "Kimi K2.5 (NVIDIA, retired)", Version: "k2.5", InputPrice: 0.6, OutputPrice: 3.0, ContextWindow: 262144, MaxOutput: 16384, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true, Deprecated: true, FallbackModel: "moonshot/kimi-k2.5"},
 
 	// xai
-	{ID: "xai/grok-3", Name: "Grok 3", Version: "3", InputPrice: 3.0, OutputPrice: 15.0, ContextWindow: 131072, MaxOutput: 16384, Reasoning: true, ToolCalling: true},
-	{ID: "xai/grok-3-mini", Name: "Grok 3 Mini", Version: "3-mini", InputPrice: 0.3, OutputPrice: 0.5, ContextWindow: 131072, MaxOutput: 16384, ToolCalling: true},
-	{ID: "xai/grok-4-fast-reasoning", Name: "Grok 4 Fast Reasoning", Version: "4", InputPrice: 0.2, OutputPrice: 0.5, ContextWindow: 2000000, MaxOutput: 16384, Reasoning: true, ToolCalling: true},
-	{ID: "xai/grok-4-fast-non-reasoning", Name: "Grok 4 Fast", Version: "4", InputPrice: 0.2, OutputPrice: 0.5, ContextWindow: 2000000, MaxOutput: 16384, ToolCalling: true},
+	{ID: "xai/grok-3", Name: "Grok 3", Version: "3", InputPrice: 3, OutputPrice: 15, ContextWindow: 131072, MaxOutput: 16384, Reasoning: true, ToolCalling: true, Deprecated: true, FallbackModel: "xai/grok-4-1-fast-non-reasoning"},
+	{ID: "xai/grok-3-mini", Name: "Grok 3 Mini", Version: "3-mini", InputPrice: 0.3, OutputPrice: 0.5, ContextWindow: 131072, MaxOutput: 16384, ToolCalling: true, Deprecated: true, FallbackModel: "xai/grok-4-1-fast-non-reasoning"},
+	{ID: "xai/grok-4-fast-reasoning", Name: "Grok 4 Fast Reasoning", Version: "4", InputPrice: 0.2, OutputPrice: 0.5, ContextWindow: 2000000, MaxOutput: 16384, Reasoning: true, ToolCalling: true, Deprecated: true, FallbackModel: "xai/grok-4-1-fast-reasoning"},
+	{ID: "xai/grok-4-fast-non-reasoning", Name: "Grok 4 Fast", Version: "4", InputPrice: 0.2, OutputPrice: 0.5, ContextWindow: 2000000, MaxOutput: 16384, ToolCalling: true, Deprecated: true, FallbackModel: "xai/grok-4-1-fast-non-reasoning"},
 	{ID: "xai/grok-4-1-fast-reasoning", Name: "Grok 4.1 Fast Reasoning", Version: "4.1", InputPrice: 0.2, OutputPrice: 0.5, ContextWindow: 2000000, MaxOutput: 16384, Reasoning: true, ToolCalling: true},
 	{ID: "xai/grok-4-1-fast-non-reasoning", Name: "Grok 4.1 Fast", Version: "4.1", InputPrice: 0.2, OutputPrice: 0.5, ContextWindow: 2000000, MaxOutput: 16384, ToolCalling: true},
 	{ID: "xai/grok-4-0709", Name: "Grok 4 (0709)", Version: "4-0709", InputPrice: 3.0, OutputPrice: 15.0, ContextWindow: 256000, MaxOutput: 16384, Reasoning: true, ToolCalling: true},
-	{ID: "xai/grok-2-vision", Name: "Grok 2 Vision", Version: "2", InputPrice: 2.0, OutputPrice: 10.0, ContextWindow: 32768, MaxOutput: 16384, Vision: true, ToolCalling: true},
+	{ID: "xai/grok-2-vision", Name: "Grok 2 Vision", Version: "2", InputPrice: 2, OutputPrice: 10, ContextWindow: 32768, MaxOutput: 16384, Vision: true, ToolCalling: true, Deprecated: true, FallbackModel: "xai/grok-4.3"},
 	{ID: "xai/grok-4.20-reasoning", Name: "Grok 4.20 Reasoning", Version: "4.20", InputPrice: 2.0, OutputPrice: 6.0, ContextWindow: 2000000, MaxOutput: 16384, Reasoning: true, ToolCalling: true},
 	{ID: "xai/grok-4.20-non-reasoning", Name: "Grok 4.20", Version: "4.20", InputPrice: 2.0, OutputPrice: 6.0, ContextWindow: 2000000, MaxOutput: 16384, ToolCalling: true},
 	{ID: "xai/grok-4.20-multi-agent", Name: "Grok 4.20 Multi-Agent", Version: "4.20", InputPrice: 2.0, OutputPrice: 6.0, ContextWindow: 2000000, MaxOutput: 16384, Reasoning: true, ToolCalling: true},
@@ -400,7 +434,7 @@ var Models = []ModelDef{
 	{ID: "xai/grok-build-0.1", Name: "Grok Build 0.1", Version: "0.1", InputPrice: 1.0, OutputPrice: 2.0, ContextWindow: 256000, MaxOutput: 16384, Agentic: true, ToolCalling: true},
 
 	// tencent
-	{ID: "tencent/hy3", Name: "Tencent Hy3", Version: "hy3", InputPrice: 0.132, OutputPrice: 0.528, ContextWindow: 262144, MaxOutput: 128000, Reasoning: true, ToolCalling: true},
+	{ID: "tencent/hy3", Name: "Tencent Hy3", Version: "hy3", InputPrice: 0.132, OutputPrice: 0.528, ContextWindow: 262144, MaxOutput: 128000, Reasoning: true, ToolCalling: true, Deprecated: true, FallbackModel: "qwen/qwen3.7-flash"},
 
 	// xiaomi
 	{ID: "xiaomi/mimo-v2.5-pro", Name: "Xiaomi MiMo-V2.5 Pro", Version: "v2.5-pro", InputPrice: 0.435, OutputPrice: 0.87, ContextWindow: 1048576, MaxOutput: 131072, Reasoning: true, ToolCalling: true},
@@ -424,7 +458,7 @@ var Models = []ModelDef{
 	{ID: "free/seed-oss-36b", Name: "[Free] Seed-OSS 36B", Version: "oss-36b", InputPrice: 0, OutputPrice: 0, ContextWindow: 131072, MaxOutput: 16384, Deprecated: true, FallbackModel: "free/nemotron-3.5-lightning"},
 	{ID: "free/mistral-nemotron", Name: "[Free] Mistral Nemotron", Version: "nemotron", InputPrice: 0, OutputPrice: 0, ContextWindow: 131072, MaxOutput: 16384, Deprecated: true, FallbackModel: "free/nemotron-3.5-lightning"},
 	{ID: "free/step-3.7-flash", Name: "[Free] StepFun Step 3.7 Flash", Version: "3.7-flash", InputPrice: 0, OutputPrice: 0, ContextWindow: 131072, MaxOutput: 16384, Reasoning: true, Deprecated: true, FallbackModel: "free/nemotron-3.5-lightning"},
-	{ID: "free/nemotron-nano-9b-v2", Name: "[Free] Nemotron Nano 9B v2", Version: "nano-9b-v2", InputPrice: 0, OutputPrice: 0, ContextWindow: 131072, MaxOutput: 16384, Reasoning: true, Deprecated: true, FallbackModel: "free/nemotron-3-nano-30b"},
+	{ID: "free/nemotron-nano-9b-v2", Name: "[Free] Nemotron Nano 9B v2", Version: "nano-9b-v2", InputPrice: 0, OutputPrice: 0, ContextWindow: 131072, MaxOutput: 16384, Reasoning: true, Deprecated: true, FallbackModel: "free/nemotron-3.5-lightning"},
 	{ID: "free/nemotron-nano-12b-v2-vl", Name: "[Free] Nemotron Nano 12B v2 VL", Version: "nano-12b-v2-vl", InputPrice: 0, OutputPrice: 0, ContextWindow: 131072, MaxOutput: 16384, Reasoning: true, Deprecated: true, FallbackModel: "free/nemotron-3-nano-omni-30b-a3b-reasoning"},
 	{ID: "free/nemotron-3.5-lightning", Name: "[Free] Nemotron 3.5 Lightning", Version: "3.5-lightning", InputPrice: 0, OutputPrice: 0, ContextWindow: 1000000, MaxOutput: 16384, Reasoning: true},
 	{ID: "free/nemotron-3-nano-30b", Name: "[Free] Nemotron 3 Nano 30B", Version: "3-nano-30b", InputPrice: 0, OutputPrice: 0, ContextWindow: 131072, MaxOutput: 16384, Reasoning: true},
@@ -434,10 +468,10 @@ var Models = []ModelDef{
 	{ID: "free/laguna-xs-2.1", Name: "[Free] Poolside Laguna XS 2.1", Version: "xs-2.1", InputPrice: 0, OutputPrice: 0, ContextWindow: 131072, MaxOutput: 16384},
 
 	// qwen
-	{ID: "qwen/qwen3.8-flash", Name: "Qwen3.8 Flash", Version: "3.8-flash", InputPrice: 0.15, OutputPrice: 0.47, ContextWindow: 1000000, MaxOutput: 131072, Reasoning: true, Vision: true, ToolCalling: true},
+	{ID: "qwen/qwen3.8-flash", Name: "Qwen3.8 Flash", Version: "3.8-flash", InputPrice: 0.15, OutputPrice: 0.47, ContextWindow: 1000000, MaxOutput: 131072, Reasoning: true, Vision: true},
 
 	// deepseek
-	{ID: "deepseek/deepseek-v4-flash-vision-exp", Name: "DeepSeek V4 Flash Vision", Version: "v4-flash-vision-exp", InputPrice: 0.44, OutputPrice: 1.32, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, Vision: true, ToolCalling: true},
+	{ID: "deepseek/deepseek-v4-flash-vision-exp", Name: "DeepSeek V4 Flash Vision", Version: "v4-flash-vision-exp", InputPrice: 0.3, OutputPrice: 1.2, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, Vision: true},
 
 	// xiaomi
 	{ID: "xiaomi/mimo-v2.5", Name: "Xiaomi MiMo V2.5", Version: "2.5", InputPrice: 0.14, OutputPrice: 0.28, ContextWindow: 1048576, MaxOutput: 131072, Reasoning: true, Vision: true, ToolCalling: true},
@@ -462,6 +496,26 @@ var Models = []ModelDef{
 	{ID: "free/nemotron-super-49b", Name: "nemotron-super-49b (retired)", ContextWindow: 131072, MaxOutput: 16384, InputPrice: 0, OutputPrice: 0, Deprecated: true, FallbackModel: "free/nemotron-3.5-lightning"},
 	{ID: "free/nemotron-3-super-120b", Name: "nemotron-3-super-120b (retired)", ContextWindow: 131072, MaxOutput: 16384, InputPrice: 0, OutputPrice: 0, Deprecated: true, FallbackModel: "free/nemotron-3.5-lightning"},
 	{ID: "free/devstral-2-123b", Name: "devstral-2-123b (retired)", ContextWindow: 131072, MaxOutput: 16384, InputPrice: 0, OutputPrice: 0, Deprecated: true, FallbackModel: "free/nemotron-3.5-lightning"},
+	// Added from ClawRouter 78e489a (0.12.297 source).
+	{ID: "openai/gpt-6-astra", Name: "GPT-6 Astra", Version: "6", InputPrice: 10, OutputPrice: 50, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/gpt-6-sol", Name: "GPT-6 Sol", Version: "6", InputPrice: 2, OutputPrice: 10, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/gpt-6.1-sol", Name: "GPT-6.1 Sol", Version: "6.1", InputPrice: 2, OutputPrice: 10, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/gpt-6-luna", Name: "GPT-6 Luna", Version: "6", InputPrice: 0.1, OutputPrice: 0.5, ContextWindow: 1050000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "openai/gpt-5.1", Name: "GPT-5.1", Version: "5.1", InputPrice: 1.25, OutputPrice: 10, ContextWindow: 400000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "anthropic/claude-fable-5.1", Name: "Claude Fable 5.1", Version: "5.1", InputPrice: 10, OutputPrice: 50, ContextWindow: 1000000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "anthropic/claude-opus-5.5", Name: "Claude Opus 5.5", Version: "5.5", InputPrice: 4, OutputPrice: 20, ContextWindow: 1000000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "anthropic/claude-sonnet-5.5", Name: "Claude Sonnet 5.5", Version: "5.5", InputPrice: 2, OutputPrice: 10, ContextWindow: 1000000, MaxOutput: 128000, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "google/gemini-4-argon", Name: "Gemini 4 Argon", Version: "4", InputPrice: 2, OutputPrice: 10, ContextWindow: 1048576, MaxOutput: 65536, Reasoning: true, Vision: true},
+	{ID: "deepseek/deepseek-v4.1-flash", Name: "DeepSeek V4.1 Flash", Version: "4.1-flash", InputPrice: 0.14, OutputPrice: 0.28, ContextWindow: 1048576, MaxOutput: 65536, ToolCalling: true},
+	{ID: "xai/grok-4.7", Name: "Grok 4.7", Version: "4.7", InputPrice: 2, OutputPrice: 6, ContextWindow: 500000, MaxOutput: 16384, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "xai/grok-4.6", Name: "Grok 4.6", Version: "4.6", InputPrice: 2, OutputPrice: 6, ContextWindow: 500000, MaxOutput: 16384, Reasoning: true, Vision: true, Agentic: true, ToolCalling: true},
+	{ID: "free/muse-glimmer-30b", Name: "[Free] Muse Glimmer 30B", Version: "30b", InputPrice: 0, OutputPrice: 0, ContextWindow: 131072, MaxOutput: 16384, Reasoning: true},
+	{ID: "qwen/qwen3.8-max", Name: "Qwen3.8 Max", Version: "3.8-max", InputPrice: 2, OutputPrice: 6, ContextWindow: 1000000, MaxOutput: 131072, Reasoning: true},
+	{ID: "tencent/hy4-preview", Name: "Tencent Hy4 Preview", Version: "hy4-preview", InputPrice: 0.834, OutputPrice: 2.501, ContextWindow: 1048576, MaxOutput: 64000, Reasoning: true},
+	{ID: "mistral/mistral-large-4", Name: "Mistral Large 4", Version: "large-4", InputPrice: 1.36, OutputPrice: 4.18, ContextWindow: 524288, MaxOutput: 262144, Reasoning: true, Vision: true},
+	{ID: "poolside/laguna-s-2.1", Name: "Poolside Laguna S 2.1", Version: "s-2.1", InputPrice: 0.09, OutputPrice: 0.18, ContextWindow: 1048576, MaxOutput: 131072},
+	// Added from ClawRouter 78e489a (0.12.297 source).
+
 }
 
 // modelIndex is built on init for fast lookups.

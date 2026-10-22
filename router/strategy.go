@@ -3,8 +3,6 @@ package router
 import (
 	"fmt"
 	"log"
-	"math"
-	"regexp"
 	"strings"
 	"time"
 )
@@ -85,9 +83,10 @@ func (s *RulesStrategy) Name() string { return "rules" }
 func (s *RulesStrategy) Route(prompt string, systemPrompt string, maxOutputTokens int, options RouterOptions) RoutingDecision {
 	config := options.Config
 
-	// Estimate input tokens (~4 chars per token)
+	// Size all context while scanning a bounded sample for request intent.
 	fullText := systemPrompt + " " + prompt
-	estimatedTokens := int(math.Ceil(float64(len(fullText)) / 4))
+	estimatedTokens := EstimateTokens(fullText)
+	prompt = sampleForScan(prompt, config.Classifier.PromptTruncationChars)
 
 	// Rule-based classification
 	ruleResult := ClassifyByRules(prompt, systemPrompt, estimatedTokens, config.Scoring)
@@ -186,11 +185,7 @@ func (s *RulesStrategy) Route(prompt string, systemPrompt string, maxOutputToken
 	}
 
 	// Structured output detection
-	hasStructuredOutput := false
-	if systemPrompt != "" {
-		structuredRe := regexp.MustCompile(`(?i)json|structured|schema`)
-		hasStructuredOutput = structuredRe.MatchString(systemPrompt)
-	}
+	hasStructuredOutput := options.RequiresStructuredOutput
 
 	var tier Tier
 	var confidence float64

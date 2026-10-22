@@ -49,17 +49,17 @@ type DimensionScore struct {
 
 // RoutingDecision is the final output: which model to use and why.
 type RoutingDecision struct {
-	Model        string                // selected model ID
-	Tier         Tier                  // classified tier
-	Confidence   float64               // confidence in classification
-	Method       string                // "rules" or "llm"
-	Reasoning    string                // human-readable reasoning
-	CostEstimate float64               // estimated cost in USD
-	BaselineCost float64               // what Claude Opus would cost
-	Savings      float64               // 0-1 percentage saved vs baseline
-	AgenticScore float64               // 0-1 agentic task score
-	TierConfigs  map[Tier]TierConfig   // tier configs used for this decision
-	Profile      string                // "auto", "eco", "premium", "agentic"
+	Model        string              // selected model ID
+	Tier         Tier                // classified tier
+	Confidence   float64             // confidence in classification
+	Method       string              // "rules" or "llm"
+	Reasoning    string              // human-readable reasoning
+	CostEstimate float64             // estimated cost in USD
+	BaselineCost float64             // what Claude Opus would cost
+	Savings      float64             // 0-1 percentage saved vs baseline
+	AgenticScore float64             // 0-1 agentic task score
+	TierConfigs  map[Tier]TierConfig // tier configs used for this decision
+	Profile      string              // "auto", "eco", "premium", "agentic"
 }
 
 // TierConfig maps a tier to its primary model and fallback chain.
@@ -70,11 +70,12 @@ type TierConfig struct {
 
 // RouterOptions carries configuration for a single routing call.
 type RouterOptions struct {
-	Config         RoutingConfig
-	ModelPricing   map[string]ModelPricing
-	RoutingProfile string // "eco", "auto", "premium"
-	HasTools       bool
-	Now            *int64 // unix millis override for promotion window checks (testing)
+	Config                   RoutingConfig
+	ModelPricing             map[string]ModelPricing
+	RoutingProfile           string // "eco", "auto", "premium"
+	HasTools                 bool
+	RequiresStructuredOutput bool   // Explicit response_format, never inferred from host prose.
+	Now                      *int64 // unix millis override for promotion window checks (testing)
 }
 
 // ModelPricing holds per-model pricing info.
@@ -86,15 +87,15 @@ type ModelPricing struct {
 
 // RoutingConfig is the top-level configuration.
 type RoutingConfig struct {
-	Version      string                  `json:"version"`
-	Classifier   ClassifierConfig        `json:"classifier"`
-	Scoring      ScoringConfig           `json:"scoring"`
-	Tiers        map[Tier]TierConfig     `json:"tiers"`
-	AgenticTiers map[Tier]TierConfig     `json:"agenticTiers,omitempty"`
-	EcoTiers     map[Tier]TierConfig     `json:"ecoTiers,omitempty"`
-	PremiumTiers map[Tier]TierConfig     `json:"premiumTiers,omitempty"`
-	Promotions   []Promotion             `json:"promotions,omitempty"`
-	Overrides    OverridesConfig         `json:"overrides"`
+	Version      string              `json:"version"`
+	Classifier   ClassifierConfig    `json:"classifier"`
+	Scoring      ScoringConfig       `json:"scoring"`
+	Tiers        map[Tier]TierConfig `json:"tiers"`
+	AgenticTiers map[Tier]TierConfig `json:"agenticTiers,omitempty"`
+	EcoTiers     map[Tier]TierConfig `json:"ecoTiers,omitempty"`
+	PremiumTiers map[Tier]TierConfig `json:"premiumTiers,omitempty"`
+	Promotions   []Promotion         `json:"promotions,omitempty"`
+	Overrides    OverridesConfig     `json:"overrides"`
 }
 
 // ScoringConfig controls the weighted dimension scorer.
@@ -125,34 +126,34 @@ type ScoringConfig struct {
 		ComplexReasoning float64 `json:"complexReasoning"`
 	} `json:"tierBoundaries"`
 
-	ConfidenceSteepness  float64 `json:"confidenceSteepness"`
-	ConfidenceThreshold  float64 `json:"confidenceThreshold"`
+	ConfidenceSteepness float64 `json:"confidenceSteepness"`
+	ConfidenceThreshold float64 `json:"confidenceThreshold"`
 }
 
 // ClassifierConfig controls the LLM fallback classifier.
 type ClassifierConfig struct {
-	LLMModel             string  `json:"llmModel"`
-	LLMMaxTokens         int     `json:"llmMaxTokens"`
-	LLMTemperature       float64 `json:"llmTemperature"`
-	PromptTruncationChars int    `json:"promptTruncationChars"`
-	CacheTTLMs           int64   `json:"cacheTtlMs"`
+	LLMModel              string  `json:"llmModel"`
+	LLMMaxTokens          int     `json:"llmMaxTokens"`
+	LLMTemperature        float64 `json:"llmTemperature"`
+	PromptTruncationChars int     `json:"promptTruncationChars"`
+	CacheTTLMs            int64   `json:"cacheTtlMs"`
 }
 
 // OverridesConfig holds override rules.
 type OverridesConfig struct {
-	MaxTokensForceComplex   int  `json:"maxTokensForceComplex"`
-	StructuredOutputMinTier Tier `json:"structuredOutputMinTier"`
-	AmbiguousDefaultTier    Tier `json:"ambiguousDefaultTier"`
+	MaxTokensForceComplex   int   `json:"maxTokensForceComplex"`
+	StructuredOutputMinTier Tier  `json:"structuredOutputMinTier"`
+	AmbiguousDefaultTier    Tier  `json:"ambiguousDefaultTier"`
 	AgenticMode             *bool `json:"agenticMode,omitempty"`
 }
 
 // Promotion is a time-windowed tier override.
 type Promotion struct {
-	Name          string                           `json:"name"`
-	StartDate     string                           `json:"startDate"`
-	EndDate       string                           `json:"endDate"`
-	TierOverrides map[Tier]PartialTierConfig       `json:"tierOverrides"`
-	Profiles      []string                         `json:"profiles,omitempty"`
+	Name          string                     `json:"name"`
+	StartDate     string                     `json:"startDate"`
+	EndDate       string                     `json:"endDate"`
+	TierOverrides map[Tier]PartialTierConfig `json:"tierOverrides"`
+	Profiles      []string                   `json:"profiles,omitempty"`
 }
 
 // PartialTierConfig allows partial override of a TierConfig.

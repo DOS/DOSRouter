@@ -73,6 +73,11 @@ type Server struct {
 	routingConfig router.RoutingConfig
 	modelPricing  map[string]router.ModelPricing
 	httpClient    *http.Client
+	catalogMu     sync.RWMutex
+	catalog       *catalogSnapshot
+	catalogCtx    context.Context
+	catalogCancel context.CancelFunc
+	catalogStart  sync.Once
 
 	// Middleware components
 	dedup        *dedup.Deduplicator
@@ -81,6 +86,7 @@ type Server struct {
 	journal      *journal.SessionJournal
 	spendControl *spendcontrol.SpendControl
 	spendError   error
+	outcomes     outcomeMemory
 
 	// Deferred startup for OpenClaw plugin config (upstream v0.12.142)
 	// When OpenClaw calls Register() twice, the first call has empty pluginConfig.
@@ -106,7 +112,9 @@ func New(cfg Config) *Server {
 	if sc == nil {
 		sc, spendErr = spendcontrol.New(spendcontrol.NewFileStorage())
 	}
+	catalogCtx, catalogCancel := context.WithCancel(context.Background())
 	return &Server{
+		catalogCtx: catalogCtx, catalogCancel: catalogCancel,
 		config:        cfg,
 		routingConfig: rc,
 		modelPricing:  models.BuildPricingMap(),
@@ -126,6 +134,7 @@ func New(cfg Config) *Server {
 
 // Close shuts down the proxy server and its components.
 func (s *Server) Close() {
+	s.catalogCancel()
 	s.startMu.Lock()
 	if s.deferTimer != nil {
 		s.deferTimer.Stop()
@@ -181,6 +190,14 @@ func (s *Server) IsRegistered() bool {
 
 // ListenAndServe starts the proxy server.
 func (s *Server) ListenAndServe() error {
+	s.startCatalogRefresh()
+	addr := fmt.Sprintf("127.0.0.1:%d", s.config.Port)
+	log.Printf("DOSRouter proxy listening on %s (upstream: %s)", addr, s.config.UpstreamBase)
+	return http.ListenAndServe(addr, s.Handler())
+}
+
+// Handler exposes the same local-client protections for embedded servers.
+func (s *Server) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/v1/chat/completions", s.handleChatCompletions)
 	mux.HandleFunc("/v1/images/generations", s.handleImageGen)
@@ -193,9 +210,7 @@ func (s *Server) ListenAndServe() error {
 	// Registers: /v1/stocks/*, /v1/crypto/price/*, /v1/fx/price/*, /v1/commodity/price/*.
 	partners.NewMarketHandler().Routes(mux)
 
-	addr := fmt.Sprintf(":%d", s.config.Port)
-	log.Printf("DOSRouter proxy listening on %s (upstream: %s)", addr, s.config.UpstreamBase)
-	return http.ListenAndServe(addr, mux)
+	return localOnly(mux)
 }
 
 // chatRequest is the OpenAI-compatible request format.
@@ -217,6 +232,7 @@ type chatMessage struct {
 }
 
 func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
+	catalog := s.catalogView()
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
@@ -321,10 +337,11 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 
 		d, err := router.Route(prompt, systemPrompt, maxOutputTokens, router.RouterOptions{
-			Config:         s.routingConfig,
-			ModelPricing:   s.modelPricing,
-			RoutingProfile: routingProfile,
-			HasTools:       requestHasTools(req.Tools),
+			Config:                   s.routingConfig,
+			ModelPricing:             catalog.pricing,
+			RoutingProfile:           routingProfile,
+			HasTools:                 requestHasTools(req.Tools),
+			RequiresStructuredOutput: requiresStructuredOutput(req),
 		})
 		if err != nil {
 			http.Error(w, "Routing error: "+err.Error(), http.StatusInternalServerError)
@@ -429,10 +446,26 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	// Build fallback chain: if smart-routed, try all models in the tier
 	var fallbackChain []string
 	if decision != nil {
-		fallbackChain = router.GetFallbackChain(decision.Tier, decision.TierConfigs)
+		fallbackChain = smartFallbackChain(req, decision, catalog)
+		if len(fallbackChain) == 0 {
+			http.Error(w, "No eligible routing candidates", http.StatusServiceUnavailable)
+			return
+		}
 	}
 	if len(fallbackChain) == 0 {
 		fallbackChain = []string{resolvedModel}
+	}
+	requestKind := "chat"
+	if requestHasTools(req.Tools) {
+		requestKind = "tools"
+	}
+	keep := ""
+	if userExplicit {
+		keep = resolvedModel
+	}
+	fallbackChain = s.outcomes.demote(fallbackChain, requestKind, keep, time.Now())
+	if len(fallbackChain) > 5 {
+		fallbackChain = fallbackChain[:5]
 	}
 
 	type attemptResult struct {
@@ -441,6 +474,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 	}
 	var attempts []attemptResult
 	var resp *http.Response
+	var respBody []byte
 	var spend *requestSpend
 	accounted := make(map[*requestSpend]bool)
 	finalStatus := "interrupted"
@@ -470,7 +504,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		}
 		req.Model = tryModel
 		tryBody, _ := json.Marshal(req)
-		currentSpend, ok := s.reserveChat(w, req, tryBody, tryModel)
+		currentSpend, ok := s.reserveChatWithPricing(w, req, tryBody, tryModel, catalog.pricing)
 		if !ok {
 			return
 		}
@@ -490,6 +524,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		attemptCtx, cancelAttempt := context.WithCancel(r.Context())
 		timer := time.AfterFunc(perModelTimeout(tryModel), cancelAttempt)
 		tryResp, tryErr := retry.Do(attemptCtx, makeReqFor(tryBody), retry.WithClient(s.httpClient), retry.WithNetworkRetries(false), retry.WithMaxRetries(0))
+		timedOut := attemptCtx.Err() != nil
 		if tryResp != nil && tryResp.StatusCode >= 300 {
 			tryErr = nil
 		}
@@ -502,6 +537,9 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			}
 			if r.Context().Err() != nil {
 				return
+			}
+			if timedOut {
+				s.outcomes.record(tryModel, requestKind, false, time.Now())
 			}
 			attempts = append(attempts, attemptResult{model: tryModel, reason: tryErr.Error()})
 			break
@@ -516,6 +554,9 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				accounted[currentSpend] = true
 			}
 			errBody, _ := io.ReadAll(tryResp.Body)
+			if tryResp.StatusCode >= 500 && !paymentFailure(errBody) && !strings.Contains(strings.ToLower(string(errBody)), "overload") {
+				s.outcomes.record(tryModel, requestKind, false, time.Now())
+			}
 			tryResp.Body.Close()
 			timer.Stop()
 			cancelAttempt()
@@ -536,14 +577,51 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		// Success: stop the per-model timer so streaming is not cut at the bound,
 		// and keep the context alive (cancel deferred after the loop).
 		timer.Stop()
+		if !req.Stream {
+			var readErr error
+			if id := gatewayRequestID(tryResp.Header); id != "" {
+				w.Header().Set("X-DOSRouter-Request-Id", id)
+			}
+			respBody, readErr = io.ReadAll(tryResp.Body)
+			tryResp.Body.Close()
+			currentSpend.header = tryResp.Header
+			if readErr != nil {
+				finalizeSpend(currentSpend, "interrupted")
+				cancelAttempt()
+				if r.Context().Err() == nil {
+					s.outcomes.record(tryModel, requestKind, false, time.Now())
+					message := "Incomplete upstream response"
+					if len(attempts) > 0 {
+						message = "Incomplete fallback response"
+					}
+					http.Error(w, message, http.StatusBadGateway)
+				}
+				return
+			}
+			if isEmptyTurn(respBody) && !paymentFailure(respBody) {
+				s.outcomes.record(tryModel, requestKind, false, time.Now())
+				if decision != nil {
+					currentSpend.readUsage(respBody)
+					finalizeSpend(currentSpend, "empty")
+					cancelAttempt()
+					attempts = append(attempts, attemptResult{model: tryModel, reason: "empty turn"})
+					continue
+				}
+			} else if !paymentFailure(respBody) {
+				s.outcomes.record(tryModel, requestKind, true, time.Now())
+			}
+		}
 		cancelResp = cancelAttempt
 		resp = tryResp
 		spend = currentSpend
 		spend.header = resp.Header
 		resolvedModel = tryModel
-		if tryModel != fallbackChain[0] {
+		if decision != nil && tryModel != decision.Model {
 			w.Header().Set("X-DOSRouter-Fallback", tryModel)
 			w.Header().Set("X-DOSRouter-Model", tryModel)
+		}
+		if decision != nil && sessionID != "" {
+			s.sessions.SetSession(sessionID, tryModel, decision.Tier, false)
 		}
 		break
 	}
@@ -596,13 +674,21 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 		scanner := bufio.NewScanner(resp.Body)
 		scanner.Buffer(make([]byte, 64*1024), 1024*1024)
 		var streamInputTok, streamOutputTok int
+		streamHasOutput, streamComplete, streamFailure, streamPaymentFailure := false, false, false, false
 		proseFilters := make(map[int]*proseFilter)
 		for scanner.Scan() {
 			line := scanner.Text()
+			if line == "data: [DONE]" {
+				streamComplete = true
+			}
 			// Parse and rewrite streaming chunks: inject model name + track usage
 			if strings.HasPrefix(line, "data: ") && line != "data: [DONE]" {
 				var chunk map[string]interface{}
 				if json.Unmarshal([]byte(line[6:]), &chunk) == nil {
+					if chunk["error"] != nil {
+						streamFailure = true
+						streamPaymentFailure = paymentFailure([]byte(line))
+					}
 					// Track usage tokens
 					if u, ok := chunk["usage"].(map[string]interface{}); ok {
 						pt, inputOK := validTokenCount(u["prompt_tokens"])
@@ -636,6 +722,15 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 									delta["content"] = cleaned
 									mutated = true
 								}
+								if strings.TrimSpace(cleaned) != "" {
+									streamHasOutput = true
+								}
+								if calls, ok := delta["tool_calls"].([]interface{}); ok && len(calls) > 0 {
+									streamHasOutput = true
+								}
+								if finish != "" {
+									streamComplete = true
+								}
 							}
 							if choiceEndsWithToolCalls(choice) && !forwardToolCallProse() {
 								if delta, ok := choice["delta"].(map[string]interface{}); ok {
@@ -665,7 +760,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			// Intercept [DONE] to inject cost usage chunk
 			if line == "data: [DONE]" {
 				if decision != nil && (streamInputTok > 0 || streamOutputTok > 0) {
-					cb := buildCostBreakdown(resolvedModel, string(decision.Tier), decision.Profile, s.modelPricing, streamInputTok, streamOutputTok)
+					cb := buildCostBreakdown(resolvedModel, string(decision.Tier), decision.Profile, catalog.pricing, streamInputTok, streamOutputTok)
 					if cb != nil {
 						usageChunk := map[string]interface{}{
 							"id":      fmt.Sprintf("chatcmpl-%d", time.Now().UnixMilli()),
@@ -695,91 +790,16 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 			flusher.Flush()
 		}
 		if scanner.Err() != nil || r.Context().Err() != nil {
+			if r.Context().Err() == nil && !streamPaymentFailure {
+				s.outcomes.record(resolvedModel, requestKind, false, time.Now())
+			}
 			return
+		}
+		if !streamPaymentFailure {
+			s.outcomes.record(resolvedModel, requestKind, streamHasOutput && streamComplete && !streamFailure, time.Now())
 		}
 		spend.input, spend.output = streamInputTok, streamOutputTok
 	} else {
-		respBody, readErr := io.ReadAll(resp.Body)
-		if readErr != nil {
-			if r.Context().Err() == nil {
-				http.Error(w, "Incomplete upstream response", http.StatusBadGateway)
-			}
-			return
-		}
-
-		// --- Empty turn fallback detection ---
-		// If the response has empty content, no tool_calls, and finish_reason "stop",
-		// treat as degraded and try the next model in the fallback chain.
-		if resp.StatusCode == http.StatusOK && decision != nil && isEmptyTurn(respBody) {
-			nextModel := ""
-			for i, m := range fallbackChain {
-				if m == resolvedModel && i+1 < len(fallbackChain) {
-					nextModel = fallbackChain[i+1]
-					break
-				}
-			}
-			if nextModel != "" {
-				log.Printf("degraded response: empty turn from %s, falling back to %s", resolvedModel, nextModel)
-				req.Model = nextModel
-				fbBody, _ := json.Marshal(req)
-
-				// Re-pin session to fallback model
-				if sessionID != "" {
-					s.sessions.SetSession(sessionID, nextModel, decision.Tier, userExplicit)
-				}
-
-				spend.readUsage(respBody)
-				finalizeSpend(spend, "empty")
-				spend = nil
-				nextSpend, allowed := s.reserveChat(w, req, fbBody, nextModel)
-				if !allowed {
-					return
-				}
-				spend = nextSpend
-				fbResp, fbErr := retry.Do(r.Context(), makeReqFor(fbBody), retry.WithClient(s.httpClient), retry.WithNetworkRetries(false), retry.WithMaxRetries(0))
-				if fbResp != nil && fbResp.StatusCode >= 300 {
-					fbErr = nil
-				}
-				if fbErr != nil {
-					finalizeSpend(nextSpend, "error")
-					if fbResp != nil {
-						fbResp.Body.Close()
-					}
-					if r.Context().Err() == nil {
-						http.Error(w, "Fallback request failed", http.StatusBadGateway)
-					}
-					return
-				}
-				defer fbResp.Body.Close()
-				if fbResp.StatusCode >= 300 {
-					nextSpend.header = fbResp.Header
-					if _, settled := settledCost(fbResp.Header); settled || fbResp.StatusCode >= 500 {
-						finalizeSpend(nextSpend, "error")
-					} else {
-						nextSpend.release()
-						accounted[nextSpend] = true
-					}
-					http.Error(w, "Fallback request rejected", http.StatusBadGateway)
-					return
-				}
-				spend = nextSpend
-				spend.header = fbResp.Header
-				w.Header().Del("X-DOSRouter-Request-Id")
-				if id := gatewayRequestID(fbResp.Header); id != "" {
-					w.Header().Set("X-DOSRouter-Request-Id", id)
-				}
-				respBody, readErr = io.ReadAll(fbResp.Body)
-				if readErr != nil {
-					http.Error(w, "Incomplete fallback response", http.StatusBadGateway)
-					return
-				}
-				resp = fbResp
-				resolvedModel = nextModel
-				w.Header().Set("X-DOSRouter-Fallback", nextModel)
-				w.Header().Set("X-DOSRouter-Model", nextModel)
-
-			}
-		}
 
 		spend.readUsage(respBody)
 		// Inject usage.cost into non-streaming response (upstream v0.12.146)
@@ -834,7 +854,7 @@ func (s *Server) handleChatCompletions(w http.ResponseWriter, r *http.Request) {
 				if usage, ok := parsed["usage"].(map[string]interface{}); ok && decision != nil {
 					inputTok, _ := usage["prompt_tokens"].(float64)
 					outputTok, _ := usage["completion_tokens"].(float64)
-					cb := buildCostBreakdown(resolvedModel, string(decision.Tier), decision.Profile, s.modelPricing, int(inputTok), int(outputTok))
+					cb := buildCostBreakdown(resolvedModel, string(decision.Tier), decision.Profile, catalog.pricing, int(inputTok), int(outputTok))
 					if cb != nil {
 						usage["cost"] = cb
 					}
@@ -948,7 +968,7 @@ func (s *Server) handleModels(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var data []modelEntry
-	for _, m := range models.Models {
+	for _, m := range s.catalogView().models {
 		if m.Deprecated {
 			continue
 		}
@@ -1037,7 +1057,7 @@ func (s *Server) handleDebug(w http.ResponseWriter, r *http.Request) {
 
 	decision, _ := router.Route(req.Prompt, req.SystemPrompt, maxTokens, router.RouterOptions{
 		Config:         s.routingConfig,
-		ModelPricing:   s.modelPricing,
+		ModelPricing:   s.catalogView().pricing,
 		RoutingProfile: profile,
 		HasTools:       req.HasTools,
 	})

@@ -127,7 +127,7 @@ go test ./router/ -bench=. -benchmem
 
 This is a Go port of [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter). Applicable routing, proxy and spending-control changes are ported from upstream source snapshots. OpenClaw/desktop lifecycle and provider-specific account services are excluded; x402 signing remains unimplemented. See [UPSTREAM_SYNC.md](UPSTREAM_SYNC.md) for details.
 
-**Current sync**: v0.12.279 release (`becb296`, checked 2026-09-22). No new Go-applicable core changes since the previous snapshot; see the tracker for adapted and deferred features.
+**Current sync**: ClawRouter 0.12.297 source (`78e489a`, checked 2026-10-22; latest published release: v0.12.294). Includes updated chat metadata, gateway catalog refresh, bounded outcome memory, request-scoring fixes and local proxy protections. See the tracker for adaptations and exclusions.
 
 ## License
 

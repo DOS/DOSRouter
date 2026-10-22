@@ -70,7 +70,7 @@ func ClassifyByRules(prompt, systemPrompt string, estimatedTokens int, config Sc
 	// Count reasoning markers for override - only check USER prompt
 	var reasoningMatches int
 	for _, kw := range config.ReasoningKeywords {
-		if strings.Contains(userText, strings.ToLower(kw)) {
+		if matchesKeyword(userText, kw) {
 			reasoningMatches++
 		}
 	}
@@ -161,7 +161,7 @@ func scoreKeywordMatch(text string, keywords []string, name, signalLabel string,
 
 	var matches []string
 	for _, kw := range keywords {
-		if strings.Contains(text, strings.ToLower(kw)) {
+		if matchesKeyword(text, kw) {
 			matches = append(matches, kw)
 		}
 	}
@@ -224,7 +224,7 @@ func scoreAgenticTask(text string, keywords []string) (DimensionScore, float64) 
 	var signals []string
 
 	for _, kw := range keywords {
-		if strings.Contains(text, strings.ToLower(kw)) {
+		if matchesKeyword(text, kw) {
 			matchCount++
 			if len(signals) < 3 {
 				signals = append(signals, kw)

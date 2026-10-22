@@ -2,7 +2,7 @@
 
 **Upstream**: [BlockRunAI/ClawRouter](https://github.com/BlockRunAI/ClawRouter) (TypeScript)
 **This repo**: [DOS/DOSRouter](https://github.com/DOS/DOSRouter) (Go port)
-**Last synced**: v0.12.279 release (`becb2968711bb203a1498958de27a2b1be3780c3`, checked 2026-09-22; no new Go-applicable core changes since `05de1e0`, exclusions below)
+**Last synced**: 0.12.297 source (`78e489a`, checked 2026-10-22; latest published release/tag is v0.12.294, source-only changes through 0.12.297 included; adaptations and exclusions below)
 
 ## Sync Workflow
 
@@ -29,6 +29,49 @@ These upstream areas are excluded (TS/npm-specific):
 - Node.js/npm-specific (prettier, package.json, CI)
 
 ## Sync Log
+
+### 2026-10-22 - Sync through 0.12.297 source
+
+Owner: Codex, branch `codex/sync-clawrouter-20261022`. Compared the previous
+release commit `becb2968711bb203a1498958de27a2b1be3780c3` with upstream main
+`78e489a` (package version 0.12.297). GitHub's latest published release and
+tag at capture time is v0.12.294; 0.12.295-297 are source versions, not newly
+published GitHub releases. The sync includes the subsequent retired-Surf cleanup.
+
+Pinned dependency sources: router-core
+`8773a9954b091bd0090acdfec67c75a006c0e156` and model-catalog
+`b95efe2f025c9968742e6479bc9ec71b6a40c0f4` (catalog 2026.10.20.4).
+
+| Upstream change | Go disposition |
+| --- | --- |
+| v0.12.280-281 / 294-297 chat catalog | Add 17 chat records and 34 aliases, correct Sonnet 5 and DeepSeek Vision prices, carry Mistral Large 4's list price, remove Nano 30B from the free fallback lineup, and mark Hy3/retired GPT/Grok IDs. Preserve DOS-specific aliases, exact Nano 30B pins and retired free-to-free redirects. Bare `deepseek` follows V4.1 Flash; free V4 Flash aliases remain free. |
+| v0.12.287 gateway catalog | Each serving proxy refreshes only its configured gateway's `/v1/models?format=json` at startup and every five minutes. Validate complete updates; preserve the last good snapshot after failures; refuse redirects and free-product billing changes. New chat models are explicit picks, with no inferred tool eligibility or automatic tier promotion. Each request retains its admission-price snapshot through settlement. No remote ordering policy is fetched. |
+| v0.12.281 outcome memory | Per-server, mutex-protected last 10 outcomes for each model/chat-or-tools pair, 30-minute expiry, 512 keys. Three failures at a 50% rate move a model behind reliable candidates before the five-attempt cap. Preserve explicit pins and all-unreliable ordering. Count server failures, incomplete bodies, empty turns, attempt timeouts and observed SSE outcomes; ignore caller cancellation and payment errors. Empty non-streaming turns use the full bounded chain. |
+| v0.12.291-297 verified tools | Add the 13 probe-verified recovery candidates behind configured eligible models, ordered by estimated token price outside Premium. Preserve proven capability metadata; catalog categories cannot grant tool support. All 16 configured tier chains retain the previous primaries. |
+| v0.12.292 scoring | Size CJK characters at roughly one token each, bound intent scans to both ends of 8,000 characters, match word boundaries/inflections instead of unrelated substrings, use explicit `response_format` for structured output, and stop claiming savings for unknown prices. |
+| v0.12.282 local trust | Bind the CLI server to `127.0.0.1`; reject non-local Host, cross-site/opaque Origin and cross-site browser requests on every route. `Server.Handler()` applies the same HTTP guards for embedders. |
+| v0.12.283 strict spend reservations | Existing Go reservations already account atomically for in-flight attempts and conservatively settle lost/5xx responses. Keep that implementation. Gateway claims of zero pricing outside local `free/*` products cannot bypass configured limits. Quote-before-sign accounting is inapplicable while x402 signing remains unimplemented. |
+| v0.12.284 / 286, media, host integration | Skip account-ledger reconciliation, Solana batch settlement, local img2img filesystem/URL readers, paid OpenClaw sender commands, frozen OpenClaw configuration and Desktop lifecycle: these surfaces do not exist in this Go runtime. Existing image passthrough and Pyth-backed partners remain unchanged. |
+| npm/Node, brand, picker, Surf | Skip TS dependencies/build/publishing, Desktop UI, brand counters and picker-only changes. DOSRouter has no Surf integration to remove. Retain the existing Go CI/security workflows and independent automated review. |
+
+Intentional limitations: the existing Go rules strategy remains in place; the
+optional TypeScript portfolio strategy, empirical speed-probe decay and its
+task-affinity model are not introduced by this sync. Go does not yet identify
+repetitive-output loops as a separate failure signal. No x402 signer, ledger
+reconciliation or new paid media/provider contract is enabled.
+
+Prices and availability in the bundled snapshot are upstream source metadata,
+not live DOS provider verification. Gemini 4 Argon's bundled $2/$10 promotion
+ends after 2026-11-30 (then $4/$20); offline date-based repricing is not
+implemented. Successful catalog refreshes use the configured gateway's rates.
+The existing Gemini Flash promotion caveat below still applies offline.
+
+Validation: regression tests, `go test ./...`, `go vet ./...` and
+`go build ./...` passed locally. Native Windows has no cgo compiler, so the
+race run is covered by the existing Linux CI job. CI race tests, vulnerability
+scan, CodeQL, final-head review and merge acceptance are recorded on the sync
+PR. Scope is DOSRouter source and documentation only; no deployment, paid
+provider request, credential change or cross-repository write is included.
 
 ### 2026-09-22 - Sync to the v0.12.279 release
 
